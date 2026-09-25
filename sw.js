@@ -1,5 +1,5 @@
 // Cache per l'uso offline. Cambia VERSION quando aggiorni l'app.
-const VERSION = 'mdt-v6';
+const VERSION = 'mdt-v7';
 const FILES = ['./', 'index.html', 'firebase.js', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

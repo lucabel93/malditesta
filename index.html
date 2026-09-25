@@ -240,7 +240,12 @@ tr.tot td{font-weight:700;border-bottom:0}
       <table id="s-table"></table>
     </div>
     <div class="card">
-      <p class="label">Farmaci usati nell'anno</p>
+      <p class="label">Farmaci usati</p>
+      <div class="date-range">
+        <label>Dal mese<input type="month" id="sm-from"></label>
+        <label>Al mese<input type="month" id="sm-to"></label>
+      </div>
+      <p class="hint" id="sm-sum" style="margin:10px 0 4px"></p>
       <div id="s-meds"></div>
     </div>
     <div class="card">
@@ -591,13 +596,12 @@ function renderStats(){
   $('#s-table').innerHTML = `<tr><th>Mese</th><th>Giorni</th><th>Forti</th><th>Gg con farmaci</th><th>Farmaci</th></tr>` +
     rows.map(r => `<tr><td>${r.name}</td><td>${r.days}</td><td>${r.forti}</td><td>${r.medDays}</td><td>${r.meds}</td></tr>`).join('') +
     `<tr class="tot"><td>Totale</td><td>${tot.days}</td><td>${tot.forti}</td><td>${tot.medDays}</td><td>${tot.meds}</td></tr>`;
-  const cnt = {};
-  all.forEach(e => e.meds.forEach(m => cnt[m.name] = (cnt[m.name]||0) + 1));
-  const sorted = Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
-  const mmax = sorted.length ? sorted[0][1] : 1;
-  $('#s-meds').innerHTML = sorted.length ? sorted.map(([n,c]) => `
-    <div class="hbar"><span>${esc(n)}</span><div class="t" style="width:${c/mmax*100}%"></div><span class="n">${c}</span></div>`).join('')
-    : '<div class="empty-msg">Nessun farmaco registrato</div>';
+  // periodo dei farmaci: parte dall'anno mostrato e si può cambiare mese per mese
+  if (!medRange || medRange.year !== y) {
+    const now = new Date();
+    medRange = {year:y, from:y + '-01', to:y + '-' + (y === now.getFullYear() ? pad(now.getMonth() + 1) : '12')};
+  }
+  renderMeds();
   const from = new Date(); from.setDate(from.getDate()-29);
   const last = Object.values(db.episodes).filter(e => e.date >= iso(from) && e.date <= todayIso());
   $('#s-30').innerHTML = [
@@ -606,6 +610,28 @@ function renderStats(){
     [last.reduce((a,e)=>a+e.meds.length,0),'farmaci assunti'],
   ].map(([n,l]) => `<div class="stat"><b>${n}</b><small>${l}</small></div>`).join('');
 }
+let medRange = null;
+function renderMeds(){
+  const {from, to} = medRange;
+  $('#sm-from').value = from; $('#sm-to').value = to;
+  if (!from || !to || from > to) {
+    $('#sm-sum').textContent = '';
+    $('#s-meds').innerHTML = `<div class="empty-msg">${!from || !to ? 'Scegli il mese di inizio e di fine' : 'Il mese di inizio è dopo quello di fine'}</div>`;
+    return;
+  }
+  const eps = Object.values(db.episodes).filter(e => e.date.slice(0,7) >= from && e.date.slice(0,7) <= to);
+  const cnt = {};
+  eps.forEach(e => e.meds.forEach(m => cnt[m.name] = (cnt[m.name]||0) + 1));
+  const sorted = Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+  const mmax = sorted.length ? sorted[0][1] : 1;
+  const tot = sorted.reduce((a, [, c]) => a + c, 0), medDays = eps.filter(e => e.meds.length).length;
+  $('#sm-sum').textContent = `${tot} ${tot === 1 ? 'farmaco assunto' : 'farmaci assunti'} in ${medDays} ${medDays === 1 ? 'giorno' : 'giorni'} (${eps.length} con mal di testa).`;
+  $('#s-meds').innerHTML = sorted.length ? sorted.map(([n,c]) => `
+    <div class="hbar"><span>${esc(n)}</span><div class="t" style="width:${c/mmax*100}%"></div><span class="n">${c}</span></div>`).join('')
+    : '<div class="empty-msg">Nessun farmaco nel periodo scelto</div>';
+}
+$('#sm-from').onchange = e => { medRange.from = e.target.value; renderMeds(); };
+$('#sm-to').onchange = e => { medRange.to = e.target.value; renderMeds(); };
 $('#s-prev').onclick = () => { statYear--; renderStats(); };
 $('#s-next').onclick = () => { statYear++; renderStats(); };
 
