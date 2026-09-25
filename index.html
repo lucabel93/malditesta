@@ -71,6 +71,12 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
 .sheet{background:var(--card);width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom))}
 .sheet h3{margin:0 0 4px;font-size:18px}
 .sheet p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.linkbtn{display:block;margin:12px auto 0;color:var(--accent);font-size:15px;font-weight:500;padding:6px}
+.sync-status{display:flex;gap:10px;align-items:flex-start}
+.sync-status b{display:block;font-size:15px;word-break:break-all}
+.sync-status small{color:var(--muted);font-size:13px}
+.sync-status .dot{width:10px;height:10px;border-radius:50%;margin-top:6px;flex:none;background:var(--muted)}
+.sync-status .dot.ok{background:var(--ok)}.sync-status .dot.wait{background:var(--medio)}.sync-status .dot.err{background:var(--forte)}
 .banner{background:var(--accent-soft);color:var(--accent);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px;font-weight:500}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);
@@ -247,7 +253,29 @@ tr.tot td{font-weight:700;border-bottom:0}
         <label>Email<input type="email" id="p-email" autocomplete="email" autocapitalize="off" autocorrect="off"></label>
       </div>
       <button class="btn" id="p-save">Salva profilo</button>
-      <p class="hint">Restano solo su questo iPhone. Quando crei un report PDF puoi scegliere se aggiungerli in prima pagina, in alto a destra.</p>
+      <p class="hint">Quando crei un report PDF puoi scegliere se aggiungerli in prima pagina, in alto a destra.</p>
+    </div>
+    <div class="card">
+      <p class="label">Sincronizzazione cloud</p>
+      <div id="sync-off">
+        <p class="hint" style="margin:0">Non ancora attiva: senza account i dati restano solo su questo dispositivo.</p>
+      </div>
+      <div id="sync-login" hidden>
+        <p class="hint" style="margin:0 0 12px">Accedi per salvare i dati nel cloud e ritrovarli su tutti i tuoi dispositivi (iPhone, tablet Android…). Usa la stessa email e password ovunque.</p>
+        <div class="fields">
+          <label>Email<input type="email" id="s-email" autocomplete="username" autocapitalize="off" autocorrect="off"></label>
+          <label>Password<input type="password" id="s-pass" autocomplete="current-password" placeholder="Almeno 6 caratteri"></label>
+        </div>
+        <button class="btn" id="s-login">Accedi</button>
+        <div style="height:8px"></div>
+        <button class="btn secondary" id="s-signup">Crea account</button>
+        <button class="linkbtn" id="s-reset">Password dimenticata?</button>
+      </div>
+      <div id="sync-on" hidden>
+        <div class="sync-status"><span class="dot" id="s-dot"></span><div><b id="s-who"></b><small id="s-state"></small></div></div>
+        <button class="btn secondary" id="s-logout" style="margin-top:12px">Esci da questo dispositivo</button>
+        <p class="hint">Se esci, i dati restano su questo dispositivo ma non vengono più sincronizzati.</p>
+      </div>
     </div>
   </section>
 
@@ -350,9 +378,17 @@ function load(){
   return {episodes:{}, meds:DEFAULT_MEDS.slice(), tags:DEFAULT_TAGS.slice(), lastBackup:null};
 }
 let db = load();
+db.pending = db.pending || {};   // modifiche non ancora inviate al cloud: 'ep:AAAA-MM-GG' oppure 'settings'
+db.syncUid = db.syncUid || null; // account cloud a cui è collegato questo dispositivo
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(db)); }
   catch(e){ alert('Errore nel salvataggio dei dati: ' + e.message); }
+}
+// salva in locale e, se il dispositivo è collegato al cloud, mette in coda l'invio
+function commit(...keys){
+  if (db.syncUid) keys.forEach(k => db.pending[k] = Date.now());
+  save();
+  if (db.syncUid) pushPending();
 }
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 
@@ -366,6 +402,11 @@ const nowTime = () => { const d=new Date(); return pad(d.getHours())+':'+pad(d.g
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fmtDate(s, opts){ return parseIso(s).toLocaleDateString('it-IT', opts || {weekday:'long', day:'numeric', month:'long'}); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
+function cleanEpisode(ep, updatedAt){
+  return {date:ep.date, intensity: ep.intensity === 'Forte' ? 'Forte' : 'Medio',
+    meds:(Array.isArray(ep.meds) ? ep.meds : []).map(m=>({name:String(m.name||''), time:String(m.time||'')})).filter(m=>m.name),
+    note:String(ep.note||''), updatedAt: updatedAt || Number(ep.updatedAt) || 0};
+}
 const episodesIn = (prefix) => Object.values(db.episodes).filter(e => e.date.startsWith(prefix)).sort((a,b)=>a.date.localeCompare(b.date));
 
 // ---------- navigation ----------
@@ -453,17 +494,18 @@ $('#f-save').onclick = () => {
   if (!form.date) return toast('Scegli un giorno');
   const note = [...form.tags, form.note.trim()].filter(Boolean).join(', ');
   const ep = {date:form.date, intensity:form.intensity,
-    meds: form.meds.filter(m=>m.name).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')), note};
-  if (editing && editing !== form.date) delete db.episodes[editing];
+    meds: form.meds.filter(m=>m.name).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')), note, updatedAt:Date.now()};
+  const keys = ['ep:' + form.date];
+  if (editing && editing !== form.date) { delete db.episodes[editing]; keys.push('ep:' + editing); }
   db.episodes[form.date] = ep;
-  save();
+  commit(...keys);
   toast(editing ? 'Modifiche salvate ✓' : 'Episodio salvato ✓');
   calMonth = parseIso(form.date); calMonth.setDate(1);
   resetForm(); show('v-cal');
 };
 $('#f-del').onclick = () => {
   if (!editing || !confirm('Eliminare l\'episodio del ' + fmtDate(editing) + '?')) return;
-  delete db.episodes[editing]; save(); toast('Episodio eliminato');
+  delete db.episodes[editing]; commit('ep:' + editing); toast('Episodio eliminato');
   resetForm(); show('v-cal');
 };
 $('#f-cancel').onclick = () => { resetForm(); show('v-cal'); };
@@ -562,7 +604,7 @@ function renderList(sel, arr, kind){
     if (up){ const i=+up.dataset.up; [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; }
     else if (del){ if (!confirm('Rimuovere "' + arr[+del.dataset.del] + '" dalla lista?\nGli episodi già salvati non vengono modificati.')) return; arr.splice(+del.dataset.del,1); }
     else return;
-    save(); renderSettings(); renderForm();
+    commit('settings'); renderSettings(); renderForm();
   };
 }
 function renderSettings(){
@@ -575,7 +617,7 @@ function renderSettings(){
 function addTo(arr, input, upper){
   let v = $(input).value.trim(); if (upper) v = v.toUpperCase();
   if (!v) return; if (arr.includes(v)) return toast('Già presente');
-  arr.push(v); $(input).value = ''; save(); renderSettings(); renderForm(); toast('Aggiunto ✓');
+  arr.push(v); $(input).value = ''; commit('settings'); renderSettings(); renderForm(); toast('Aggiunto ✓');
 }
 $('#set-med-add').onclick = () => addTo(db.meds, '#set-med-new', true);
 $('#set-tag-add').onclick = () => addTo(db.tags, '#set-tag-new', false);
@@ -625,19 +667,19 @@ $('#imp-file').onchange = async e => {
     const valid = data.episodes.filter(ep => /^\d{4}-\d{2}-\d{2}$/.test(ep.date) && ['Medio','Forte'].includes(ep.intensity));
     const clash = valid.filter(ep => db.episodes[ep.date]).length;
     if (!confirm(`Importare ${valid.length} episodi?` + (clash ? `\n${clash} giorni sono già presenti e verranno sostituiti.` : ''))) return;
-    valid.forEach(ep => db.episodes[ep.date] = {date:ep.date, intensity:ep.intensity,
-      meds:(ep.meds||[]).map(m=>({name:String(m.name||''), time:String(m.time||'')})).filter(m=>m.name), note:String(ep.note||'')});
+    valid.forEach(ep => db.episodes[ep.date] = cleanEpisode(ep));
     (data.meds || valid.flatMap(ep => (ep.meds||[]).map(m=>m.name))).forEach(m => { if (m && !db.meds.includes(m)) db.meds.push(m); });
     (data.tags || []).forEach(t => { if (t && !db.tags.includes(t)) db.tags.push(t); });
     if (data.profile && typeof data.profile === 'object' && !hasProfile())
       db.profile = Object.fromEntries(PROFILE_FIELDS.map(k => [k, String(data.profile[k] || '')]));
-    save(); renderSettings(); renderForm(); toast(valid.length + ' episodi importati ✓');
+    commit('settings', ...valid.map(ep => 'ep:' + ep.date)); renderSettings(); renderForm(); toast(valid.length + ' episodi importati ✓');
   } catch(err) { alert('Impossibile leggere il file: ' + err.message); }
 };
 $('#wipe').onclick = () => {
-  if (!confirm('Cancellare TUTTI gli episodi? L\'operazione non si può annullare.')) return;
+  if (!confirm('Cancellare TUTTI gli episodi? L\'operazione non si può annullare.' + (db.syncUid ? '\nVerranno cancellati anche dal cloud e da tutti i dispositivi collegati.' : ''))) return;
   if (!confirm('Sei sicuro? Ti consiglio di fare prima un backup.')) return;
-  db.episodes = {}; save(); renderSettings(); resetForm(); toast('Dati cancellati');
+  const keys = Object.keys(db.episodes).map(d => 'ep:' + d);
+  db.episodes = {}; commit(...keys); renderSettings(); resetForm(); toast('Dati cancellati');
 };
 
 // ---------- profilo ----------
@@ -647,12 +689,172 @@ function renderProfile(){
   const p = db.profile || {};
   PROFILE_FIELDS.forEach(k => $('#p-' + k).value = p[k] || '');
   $('#p-nascita').max = todayIso();
+  renderSync();
 }
 $('#p-save').onclick = () => {
   const p = Object.fromEntries(PROFILE_FIELDS.map(k => [k, $('#p-' + k).value.trim()]));
   if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) return toast('Controlla l\'indirizzo email');
-  db.profile = p; save(); renderProfile(); toast('Profilo salvato ✓');
+  db.profile = p; commit('settings'); renderProfile(); toast('Profilo salvato ✓');
 };
+
+// ---------- sincronizzazione cloud (Firebase) ----------
+// Dati del progetto: Console Firebase → Impostazioni progetto → Le tue app → App web.
+// Non sono segreti: l'accesso ai dati è protetto dall'account e dalle regole in firestore.rules.
+const FIREBASE_CONFIG = null;
+const fbSetup = window.__MDT_FIREBASE || (FIREBASE_CONFIG && {config: FIREBASE_CONFIG});
+let fb = null, fbAuth = null, fbStore = null, fbUser = null, fbListeners = [], syncError = '', syncBusy = '';
+const inflight = {};
+
+const AUTH_ERRORS = {
+  'auth/invalid-credential':'Email o password errate', 'auth/wrong-password':'Email o password errate',
+  'auth/user-not-found':'Nessun account con questa email', 'auth/invalid-email':'Email non valida',
+  'auth/email-already-in-use':'Esiste già un account con questa email: usa Accedi',
+  'auth/weak-password':'La password deve avere almeno 6 caratteri', 'auth/missing-password':'Scrivi la password',
+  'auth/network-request-failed':'Nessuna connessione a internet', 'auth/too-many-requests':'Troppi tentativi: riprova tra qualche minuto',
+  'permission-denied':'Accesso ai dati negato: controlla le regole di Firestore', 'unavailable':'Nessuna connessione a internet',
+};
+const errText = e => AUTH_ERRORS[e && e.code] || (e && e.message) || String(e);
+
+function renderSync(){
+  const on = !!fbUser && db.syncUid === fbUser.uid;
+  $('#sync-off').hidden = !!fb;
+  $('#sync-login').hidden = !fb || !!fbUser;
+  $('#sync-on').hidden = !fbUser;
+  if (!fbSetup) $('#sync-off').firstElementChild.textContent = 'Non ancora configurata: per ora i dati restano solo su questo dispositivo.';
+  else if (!fb) $('#sync-off').firstElementChild.textContent = syncError || 'Caricamento…';
+  if (!fbUser) return;
+  const n = Object.keys(db.pending).length;
+  let cls = 'ok', txt = 'Sincronizzato';
+  if (syncError) { cls = 'err'; txt = syncError; }
+  else if (syncBusy || !on) { cls = 'wait'; txt = syncBusy || 'Collegamento…'; }
+  else if (n) { cls = 'wait'; txt = navigator.onLine ? `Invio di ${n} modific${n === 1 ? 'a' : 'he'}…` : `Offline: ${n} modific${n === 1 ? 'a' : 'he'} da inviare`; }
+  else if (!navigator.onLine) { cls = 'wait'; txt = 'Offline: i dati si aggiornano quando torna la connessione'; }
+  $('#s-dot').className = 'dot ' + cls;
+  $('#s-who').textContent = fbUser.email;
+  $('#s-state').textContent = txt;
+}
+function refreshViews(){
+  const v = document.querySelector('.view.active').id;
+  if (v === 'v-cal') renderCal();
+  if (v === 'v-stats') renderStats();
+  if (v === 'v-set') renderSettings();
+  if (v === 'v-add' && !editing) renderForm();
+  if (v === 'v-profile' && !document.activeElement?.closest('#v-profile .fields')) renderProfile();
+  renderSync();
+}
+
+const userDoc = () => fb.doc(fbStore, 'users', fbUser.uid);
+const epCol = () => fb.collection(fbStore, 'users', fbUser.uid, 'episodes');
+const settingsData = () => ({meds:db.meds, tags:db.tags, profile:db.profile || {}});
+
+function pushPending(){
+  if (!fb || !fbUser || db.syncUid !== fbUser.uid) return renderSync();
+  Object.entries(db.pending).forEach(([key, stamp]) => {
+    if (inflight[key] === stamp) return;
+    inflight[key] = stamp;
+    let ref, data;
+    if (key === 'settings') { ref = userDoc(); data = settingsData(); }
+    else { const date = key.slice(3); ref = fb.doc(epCol(), date); data = db.episodes[date]; }
+    (data ? fb.setDoc(ref, data) : fb.deleteDoc(ref))
+      .then(() => { if (db.pending[key] === stamp) { delete db.pending[key]; save(); } syncError = ''; })
+      .catch(e => { syncError = errText(e); })
+      .finally(() => { if (inflight[key] === stamp) delete inflight[key]; renderSync(); });
+  });
+  renderSync();
+}
+
+// Primo accesso da questo dispositivo: unisce i dati locali con quelli del cloud.
+// Per ogni giorno vince la versione modificata più di recente; le liste di farmaci e note vengono unite.
+async function linkDevice(){
+  const [epSnap, setSnap] = await Promise.all([fb.getDocsFromServer(epCol()), fb.getDocFromServer(userDoc())]);
+  const remote = {};
+  epSnap.forEach(d => remote[d.id] = d.data());
+  Object.values(db.episodes).forEach(ep => {
+    const r = remote[ep.date];
+    if (!r || (ep.updatedAt || 0) > (r.updatedAt || 0)) db.pending['ep:' + ep.date] = Date.now();
+  });
+  Object.entries(remote).forEach(([date, r]) => { if (!db.pending['ep:' + date]) db.episodes[date] = cleanEpisode(r); });
+  if (setSnap.exists()) {
+    const r = setSnap.data(), before = JSON.stringify(r);
+    const union = (a, b) => [...(a || []), ...(b || []).filter(x => !(a || []).includes(x))];
+    db.meds = union(r.meds, db.meds); db.tags = union(r.tags, db.tags);
+    const rp = r.profile || {};
+    if (!PROFILE_FIELDS.some(k => rp[k])) db.profile = db.profile || {}; else db.profile = rp;
+    if (JSON.stringify(settingsData()) !== before) db.pending.settings = Date.now();
+  } else db.pending.settings = Date.now();
+  db.syncUid = fbUser.uid;
+  save();
+}
+
+function startListeners(){
+  fbListeners.push(fb.onSnapshot(epCol(), snap => {
+    const next = {};
+    snap.forEach(d => next[d.id] = cleanEpisode(d.data()));
+    // i giorni modificati qui e non ancora confermati dal cloud restano come sono in locale
+    Object.keys(db.pending).filter(k => k.startsWith('ep:')).forEach(k => {
+      const date = k.slice(3);
+      if (db.episodes[date]) next[date] = db.episodes[date]; else delete next[date];
+    });
+    db.episodes = next; save(); refreshViews();
+  }, e => { syncError = errText(e); renderSync(); }));
+  fbListeners.push(fb.onSnapshot(userDoc(), snap => {
+    if (!snap.exists() || db.pending.settings) return;
+    const r = snap.data();
+    if (Array.isArray(r.meds)) db.meds = r.meds.map(String);
+    if (Array.isArray(r.tags)) db.tags = r.tags.map(String);
+    if (r.profile && typeof r.profile === 'object') db.profile = Object.fromEntries(PROFILE_FIELDS.map(k => [k, String(r.profile[k] || '')]));
+    save(); refreshViews();
+  }, e => { syncError = errText(e); renderSync(); }));
+}
+
+async function onUser(user){
+  fbListeners.forEach(u => u()); fbListeners = [];
+  fbUser = user; syncError = '';
+  if (!user) return renderSync();
+  if (db.syncUid !== user.uid) {
+    syncBusy = 'Unione dei dati di questo dispositivo con il cloud…'; renderSync();
+    try { await linkDevice(); }
+    catch (e) { syncBusy = ''; syncError = errText(e) + '. Riprovo quando torna la connessione.'; return renderSync(); }
+    syncBusy = '';
+  }
+  startListeners(); pushPending(); refreshViews();
+}
+
+async function authAction(btn, fn){
+  const email = $('#s-email').value.trim(), pass = $('#s-pass').value;
+  if (!email) return toast('Scrivi la tua email');
+  btn.disabled = true;
+  try { await fn(email, pass); $('#s-pass').value = ''; }
+  catch (e) { alert(errText(e)); }
+  finally { btn.disabled = false; }
+}
+$('#s-login').onclick = e => authAction(e.target, (em, pw) => fb.signInWithEmailAndPassword(fbAuth, em, pw));
+$('#s-signup').onclick = e => authAction(e.target, (em, pw) => fb.createUserWithEmailAndPassword(fbAuth, em, pw));
+$('#s-reset').onclick = e => authAction(e.target, async em => {
+  await fb.sendPasswordResetEmail(fbAuth, em);
+  alert('Ti ho mandato un\'email per reimpostare la password. Poi torna qui e accedi con la nuova password.');
+});
+$('#s-logout').onclick = async () => {
+  const n = Object.keys(db.pending).length;
+  if (!confirm((n ? `Ci sono ${n} modifiche non ancora inviate al cloud: resteranno solo su questo dispositivo.\n` : '') + 'Uscire dall\'account su questo dispositivo?')) return;
+  db.syncUid = null; db.pending = {}; save();
+  await fb.signOut(fbAuth);
+};
+addEventListener('online', () => { if (fbUser && db.syncUid !== fbUser.uid) onUser(fbUser); else pushPending(); });
+addEventListener('offline', renderSync);
+
+if (fbSetup) import('./firebase.js').then(m => {
+  fb = m;
+  const app = fb.initializeApp(fbSetup.config);
+  fbAuth = fb.initializeAuth(app, {persistence:[fb.indexedDBLocalPersistence, fb.browserLocalPersistence]});
+  fbStore = fb.initializeFirestore(app, {localCache: fb.persistentLocalCache({tabManager: fb.persistentMultipleTabManager()})});
+  if (fbSetup.emulator) {
+    fb.connectAuthEmulator(fbAuth, 'http://' + fbSetup.emulator + ':9099', {disableWarnings:true});
+    fb.connectFirestoreEmulator(fbStore, fbSetup.emulator, 8080);
+  }
+  fb.onAuthStateChanged(fbAuth, onUser);
+  renderSync();
+}).catch(() => { syncError = 'Sincronizzazione non disponibile: apri l\'app con la connessione attiva almeno una volta.'; renderSync(); });
 
 // ---------- report PDF ----------
 // Generatore PDF minimale (A4, font Helvetica standard del PDF): nessuna libreria esterna, funziona offline.

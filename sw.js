@@ -1,6 +1,6 @@
 // Cache per l'uso offline. Cambia VERSION quando aggiorni l'app.
-const VERSION = 'mdt-v2';
-const FILES = ['./', 'index.html', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const VERSION = 'mdt-v3';
+const FILES = ['./', 'index.html', 'firebase.js', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
