@@ -58,6 +58,7 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{padding:8px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:14px;font-weight:500}
 .chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.med .nomed{padding:0 4px;font-weight:600;color:var(--muted)}
 .chip.none.on{background:var(--muted);border-color:var(--muted)}
 .chip.add{border-style:dashed;color:var(--accent)}
 .med{display:grid;grid-template-columns:1fr 110px 40px;gap:8px;margin-bottom:8px;align-items:center}
@@ -310,7 +311,7 @@ tr.tot td{font-weight:700;border-bottom:0}
         <button class="chip" data-range="all">Tutto</button>
       </div>
       <button class="btn" id="exp-pdf">Crea report PDF</button>
-      <p class="hint">Contiene riepilogo, grafico e tabella mensile, calendario, farmaci, note ed elenco degli episodi. Puoi salvarlo in File, stamparlo o inviarlo al medico. Se hai compilato il Profilo, ti chiede se aggiungere i tuoi dati.</p>
+      <p class="hint">Contiene riepilogo, grafico e tabella mensile, calendario, farmaci e note; poi una pagina per ogni mese con i suoi episodi. Puoi salvarlo in File, stamparlo o inviarlo al medico. Se hai compilato il Profilo, ti chiede se aggiungere i tuoi dati.</p>
     </div>
     <div class="card">
       <p class="label">Notifiche</p>
@@ -435,8 +436,10 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 function cleanEpisode(ep, updatedAt){
   return {date:ep.date, intensity: ep.intensity === 'Forte' ? 'Forte' : 'Medio',
     meds:(Array.isArray(ep.meds) ? ep.meds : []).map(m=>({name:String(m.name||''), time:String(m.time||'')})).filter(m=>m.name),
+    time:String(ep.time||''), // orario dell'episodio quando non ci sono farmaci
     note:String(ep.note||''), updatedAt: updatedAt || Number(ep.updatedAt) || 0};
 }
+const noMedLabel = e => 'Nessun farmaco' + (e.time ? ' (' + e.time + ')' : '');
 const episodesIn = (prefix) => Object.values(db.episodes).filter(e => e.date.startsWith(prefix)).sort((a,b)=>a.date.localeCompare(b.date));
 
 // ---------- navigation ----------
@@ -461,7 +464,7 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => {
 let form, editing = null;
 function resetForm(date){
   editing = null;
-  form = {date: date || todayIso(), intensity:'Medio', meds:[], noMeds:false, tags:[], note:''};
+  form = {date: date || todayIso(), intensity:'Medio', meds:[], noMeds:false, noMedTime:'', tags:[], note:''};
   const existing = db.episodes[form.date];
   if (existing) return loadForm(existing);
   renderForm();
@@ -470,7 +473,7 @@ function loadForm(ep){
   editing = ep.date;
   const tags = [], rest = [];
   (ep.note||'').split(/\s*[,;]\s*/).filter(Boolean).forEach(p => (db.tags.includes(p) ? tags : rest).push(p));
-  form = {date:ep.date, intensity:ep.intensity, meds:ep.meds.map(m=>({...m})), noMeds:!ep.meds.length, tags, note:rest.join(', ')};
+  form = {date:ep.date, intensity:ep.intensity, meds:ep.meds.map(m=>({...m})), noMeds:!ep.meds.length, noMedTime:ep.time||'', tags, note:rest.join(', ')};
   renderForm();
 }
 function renderForm(){
@@ -489,7 +492,12 @@ function renderForm(){
       <select data-i="${i}" data-k="name">${opts(m.name)}</select>
       <select data-i="${i}" data-k="time" aria-label="Orario">${hourOpts(m.time)}</select>
       <button class="icon-btn" data-rm="${i}" aria-label="Rimuovi">×</button>
-    </div>`).join('');
+    </div>`).join('') + (form.noMeds ? `
+    <div class="med">
+      <div class="nomed">🚫 Nessun farmaco</div>
+      <select id="f-nomed-time" aria-label="Orario">${hourOpts(form.noMedTime)}</select>
+      <button class="icon-btn" data-nomeds aria-label="Rimuovi">×</button>
+    </div>` : '');
   // "Nessun farmaco": mal di testa senza medicine, esclude i farmaci (e viceversa)
   $('#f-medchips').innerHTML = `<button class="chip none ${form.noMeds ? 'on' : ''}" data-nomeds>🚫 Nessun farmaco</button>` +
     db.meds.map(m => `<button class="chip" data-med="${esc(m)}">+ ${esc(m)}</button>`).join('');
@@ -505,7 +513,7 @@ function renderForm(){
 $('#f-date').onchange = e => {
   const v = e.target.value; if (!v) return;
   if (db.episodes[v]) { loadForm(db.episodes[v]); toast('Episodio già presente: lo stai modificando'); }
-  else { const wasEditing = editing; form.date = v; editing = null; if (wasEditing){ form.meds=[]; form.noMeds=false; form.tags=[]; form.note=''; form.intensity='Medio'; } renderForm(); }
+  else { const wasEditing = editing; form.date = v; editing = null; if (wasEditing){ form.meds=[]; form.noMeds=false; form.noMedTime=''; form.tags=[]; form.note=''; form.intensity='Medio'; } renderForm(); }
 };
 document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
   const d = new Date(); d.setDate(d.getDate() + Number(b.dataset.quick));
@@ -515,7 +523,7 @@ $('#f-int').onclick = e => { const b = e.target.closest('button'); if (!b) retur
 $('#f-medchips').onclick = e => {
   if (e.target.closest('[data-nomeds]')) {
     form.noMeds = !form.noMeds;
-    if (form.noMeds) form.meds = [];
+    if (form.noMeds) { form.meds = []; form.noMedTime = form.date === todayIso() ? nowHour() : ''; }
     return renderForm();
   }
   const b = e.target.closest('[data-med]'); if (!b) return;
@@ -523,8 +531,15 @@ $('#f-medchips').onclick = e => {
   form.meds.push({name:b.dataset.med, time: form.date===todayIso() ? nowHour() : ''});
   renderForm();
 };
-$('#f-meds').onclick = e => { const b = e.target.closest('[data-rm]'); if (!b) return; form.meds.splice(+b.dataset.rm,1); renderForm(); };
-$('#f-meds').onchange = e => { const el = e.target; if (el.dataset.i==null) return; form.meds[+el.dataset.i][el.dataset.k] = el.value; };
+$('#f-meds').onclick = e => {
+  if (e.target.closest('[data-nomeds]')) { form.noMeds = false; return renderForm(); }
+  const b = e.target.closest('[data-rm]'); if (!b) return; form.meds.splice(+b.dataset.rm,1); renderForm();
+};
+$('#f-meds').onchange = e => {
+  const el = e.target;
+  if (el.id === 'f-nomed-time') return form.noMedTime = el.value;
+  if (el.dataset.i==null) return; form.meds[+el.dataset.i][el.dataset.k] = el.value;
+};
 $('#f-tags').onclick = e => {
   const b = e.target.closest('[data-tag]'); if (!b) return;
   const t = b.dataset.tag; form.tags = form.tags.includes(t) ? form.tags.filter(x=>x!==t) : [...form.tags, t];
@@ -536,7 +551,8 @@ $('#f-save').onclick = () => {
   if (!form.meds.some(m => m.name) && !form.noMeds) return toast('Aggiungi un farmaco oppure tocca "Nessun farmaco"');
   const note = [...form.tags, form.note.trim()].filter(Boolean).join(', ');
   const ep = {date:form.date, intensity:form.intensity,
-    meds: form.meds.filter(m=>m.name).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')), note, updatedAt:Date.now()};
+    meds: form.meds.filter(m=>m.name).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')),
+    time: form.noMeds ? form.noMedTime : '', note, updatedAt:Date.now()};
   const keys = ['ep:' + form.date];
   if (editing && editing !== form.date) { delete db.episodes[editing]; keys.push('ep:' + editing); }
   db.episodes[form.date] = ep;
@@ -555,7 +571,7 @@ $('#f-cancel').onclick = () => { resetForm(); show('v-cal'); };
 // ---------- calendar ----------
 let calMonth = new Date(); calMonth.setDate(1);
 function epLine(e){
-  const meds = e.meds.length ? e.meds.map(m => esc(m.name) + (m.time ? ` <span style="font-weight:400;color:var(--muted)">${esc(m.time)}</span>` : '')).join(' · ') : '<span style="font-weight:400;color:var(--muted)">Nessun farmaco</span>';
+  const meds = e.meds.length ? e.meds.map(m => esc(m.name) + (m.time ? ` <span style="font-weight:400;color:var(--muted)">${esc(m.time)}</span>` : '')).join(' · ') : `<span style="font-weight:400;color:var(--muted)">${esc(noMedLabel(e))}</span>`;
   const d = parseIso(e.date);
   return `<div class="ep" data-date="${e.date}">
     <div class="day ${e.intensity}">${d.getDate()}<small>${d.toLocaleDateString('it-IT',{weekday:'short'})}</small></div>
@@ -715,11 +731,11 @@ $('#exp-csv').onclick = () => {
   const eps = Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date));
   const n = Math.max(3, ...eps.map(e=>e.meds.length));
   const q = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
-  const head = ['Data','Mese','Intensità','Senza farmaci']; for (let i=1;i<=n;i++) head.push('Farmaco '+i, 'Orario '+i); head.push('Note');
+  const head = ['Data','Mese','Intensità','Senza farmaci','Orario (senza farmaci)']; for (let i=1;i<=n;i++) head.push('Farmaco '+i, 'Orario '+i); head.push('Note');
   const lines = [head.map(q).join(';')];
   eps.forEach(e => {
     const d = parseIso(e.date);
-    const r = [pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(), MESI[d.getMonth()], e.intensity, e.meds.length ? '' : 'Sì'];
+    const r = [pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(), MESI[d.getMonth()], e.intensity, e.meds.length ? '' : 'Sì', e.meds.length ? '' : e.time || ''];
     for (let i=0;i<n;i++) r.push(e.meds[i]?.name || '', e.meds[i]?.time || '');
     r.push(e.note); lines.push(r.map(q).join(';'));
   });
@@ -1122,7 +1138,7 @@ function buildReport(from, to, profile){
     pdf.text(M, y + 10, title.toUpperCase(), {size:10, bold:true, color:C.accent});
     y += 15; pdf.line(M, y, M + CW, y, C.line, 0.8); y += 8;
   };
-  const table = (cols, rows) => {
+  const table = (cols, rows, contTitle) => {
     const head = () => {
       need(20); let x = M;
       cols.forEach(c => { pdf.text(c.align === 'right' ? x + c.w - 4 : x + 4, y + 11, c.t, {size:8, bold:true, color:C.muted, align:c.align}); x += c.w; });
@@ -1135,7 +1151,11 @@ function buildReport(from, to, profile){
         return cols[i].wrap ? pdf.wrap(cell.t, cols[i].w - 8 - (cell.dot ? 11 : 0), 9, r.bold) : [String(cell.t)];
       });
       const h = Math.max(...lines.map(l => l.length)) * 11 + 6;
-      if (y + h > pdf.H - 50) { newPage(); head(); }
+      if (y + h > pdf.H - 50) {
+        newPage();
+        if (contTitle) { pdf.text(M, y + 12, contTitle + ' (continua)', {size:11, bold:true, color:C.muted}); y += 22; }
+        head();
+      }
       let x = M;
       r.cells.forEach((v, i) => {
         const c = cols[i], cell = typeof v === 'object' ? v : {t:v};
@@ -1311,18 +1331,28 @@ function buildReport(from, to, profile){
     const noteRows = Object.entries(byNote).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
     if (noteRows.length) {
       section('Note, sintomi e trigger', 40);
-      table([{t:'Nota', w:CW - 90, wrap:true}, {t:'Giorni', w:90, align:'right'}], noteRows.map(([n, c]) => ({cells:[n, c]})));
+      table([{t:'Nota', w:CW - 90, wrap:true}, {t:'Giorni', w:90, align:'right'}], noteRows.map(([n, c]) => ({cells:[n, c]})), 'Note, sintomi e trigger');
     }
 
     // --- elenco episodi
-    section('Elenco episodi', 40);
-    table([{t:'Data', w:90}, {t:'Intensità', w:62}, {t:'Farmaci (orario)', w:200, wrap:true}, {t:'Note', w:CW - 352, wrap:true}],
-      eps.map(e => ({cells: [
-        parseIso(e.date).toLocaleDateString('it-IT', {weekday:'short'}) + ' ' + dmy(e.date),
-        {t:e.intensity, dot: e.intensity === 'Forte' ? C.forte : C.medio},
-        e.meds.length ? e.meds.map(m => m.name + (m.time ? ' (' + m.time + ')' : '')).join(', ') : 'Nessun farmaco',
-        e.note || '',
-      ]})));
+    // --- dettaglio degli episodi: ogni mese parte su una pagina nuova (i mesi senza episodi non hanno pagina)
+    months.filter(mo => mo.days).forEach(mo => {
+      newPage();
+      const title = MESI[mo.m] + ' ' + mo.y;
+      pdf.text(M, y + 18, title, {size:18, bold:true});
+      y += 34;
+      const gg = n => n + (n === 1 ? ' giorno' : ' giorni');
+      pdf.text(M, y, `${gg(mo.days)} di mal di testa (${mo.forti} ${mo.forti === 1 ? 'forte' : 'forti'}) · ${mo.medDays} con farmaci · ${mo.noMed} senza farmaci · ${mo.meds} ${mo.meds === 1 ? 'farmaco assunto' : 'farmaci assunti'}`, {size:9.5, color:C.muted});
+      if (mo.partial) { y += 13; pdf.text(M, y, `Mese compreso solo in parte: dal ${dmy(mo.start)} al ${dmy(mo.end)}`, {size:8.5, color:C.muted}); }
+      y += 8; pdf.line(M, y, M + CW, y, C.accent, 1); y += 8;
+      table([{t:'Data', w:90}, {t:'Intensità', w:62}, {t:'Farmaci (orario)', w:200, wrap:true}, {t:'Note', w:CW - 352, wrap:true}],
+        eps.filter(e => e.date.startsWith(mo.key)).map(e => ({cells: [
+          parseIso(e.date).toLocaleDateString('it-IT', {weekday:'short'}) + ' ' + dmy(e.date),
+          {t:e.intensity, dot: e.intensity === 'Forte' ? C.forte : C.medio},
+          e.meds.length ? e.meds.map(m => m.name + (m.time ? ' (' + m.time + ')' : '')).join(', ') : noMedLabel(e),
+          e.note || '',
+        ]})), title);
+    });
   }
 
   // --- piè di pagina
