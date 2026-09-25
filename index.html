@@ -178,7 +178,7 @@ tr.tot td{font-weight:700;border-bottom:0}
       <p class="label">Farmaci assunti</p>
       <div id="f-meds"></div>
       <div class="chips" id="f-medchips"></div>
-      <p class="hint">Tocca un farmaco per aggiungerlo con l'ora attuale. Puoi correggere l'orario.</p>
+      <p class="hint">Tocca un farmaco per aggiungerlo con l'ora attuale. Puoi scegliere un'altra ora dal menu.</p>
     </div>
 
     <div class="card">
@@ -408,7 +408,9 @@ const pad = n => String(n).padStart(2,'0');
 const iso = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
 const todayIso = () => iso(new Date());
 const parseIso = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); };
-const nowTime = () => { const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); };
+const nowHour = () => pad(new Date().getHours()) + ':00';
+// orari a ore intere: sull'iPhone il menu a tendina è una sola rotella, più veloce dell'orologio con i minuti
+const HOURS = Array.from({length:24}, (_, h) => pad(h) + ':00');
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function fmtDate(s, opts){ return parseIso(s).toLocaleDateString('it-IT', opts || {weekday:'long', day:'numeric', month:'long'}); }
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
@@ -457,6 +459,9 @@ function renderForm(){
   $('#f-date').value = form.date;
   $('#f-date').max = todayIso();
   document.querySelectorAll('#f-int button').forEach(b => b.classList.toggle('on', b.dataset.v===form.intensity));
+  // un orario con i minuti salvato in passato resta selezionabile così com'è
+  const hourOpts = t => ['', ...[...HOURS, ...(t && !HOURS.includes(t) ? [t] : [])].sort()]
+    .map(h => `<option value="${h}" ${h === (t || '') ? 'selected' : ''}>${h || '– ora –'}</option>`).join('');
   const opts = name => {
     const list = db.meds.includes(name) || !name ? db.meds : [name, ...db.meds];
     return list.map(m => `<option ${m===name?'selected':''}>${esc(m)}</option>`).join('');
@@ -464,7 +469,7 @@ function renderForm(){
   $('#f-meds').innerHTML = form.meds.map((m,i) => `
     <div class="med">
       <select data-i="${i}" data-k="name">${opts(m.name)}</select>
-      <input type="time" data-i="${i}" data-k="time" value="${esc(m.time)}">
+      <select data-i="${i}" data-k="time" aria-label="Orario">${hourOpts(m.time)}</select>
       <button class="icon-btn" data-rm="${i}" aria-label="Rimuovi">×</button>
     </div>`).join('');
   $('#f-medchips').innerHTML = db.meds.map(m => `<button class="chip" data-med="${esc(m)}">+ ${esc(m)}</button>`).join('');
@@ -489,7 +494,7 @@ document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
 $('#f-int').onclick = e => { const b = e.target.closest('button'); if (!b) return; form.intensity = b.dataset.v; renderForm(); };
 $('#f-medchips').onclick = e => {
   const b = e.target.closest('[data-med]'); if (!b) return;
-  form.meds.push({name:b.dataset.med, time: form.date===todayIso() ? nowTime() : ''});
+  form.meds.push({name:b.dataset.med, time: form.date===todayIso() ? nowHour() : ''});
   renderForm();
 };
 $('#f-meds').onclick = e => { const b = e.target.closest('[data-rm]'); if (!b) return; form.meds.splice(+b.dataset.rm,1); renderForm(); };
