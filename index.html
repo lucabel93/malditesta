@@ -64,7 +64,13 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
 .hint{color:var(--muted);font-size:13px;margin:6px 0 0}
 .date-row{display:grid;grid-template-columns:1fr auto auto;gap:8px}
 .date-range{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.date-range label{font-size:13px;color:var(--muted);font-weight:600;display:flex;flex-direction:column;gap:4px}
+.date-range label,.fields label{font-size:13px;color:var(--muted);font-weight:600;display:flex;flex-direction:column;gap:4px}
+.fields{display:grid;gap:12px;margin-bottom:14px}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.sheet-bg[hidden]{display:none}
+.sheet{background:var(--card);width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom))}
+.sheet h3{margin:0 0 4px;font-size:18px}
+.sheet p{margin:0 0 14px;color:var(--muted);font-size:14px}
 .banner{background:var(--accent-soft);color:var(--accent);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px;font-weight:500}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);
@@ -229,6 +235,22 @@ tr.tot td{font-weight:700;border-bottom:0}
     </div>
   </section>
 
+  <!-- ======= PROFILO ======= -->
+  <section class="view" id="v-profile">
+    <div class="card">
+      <p class="label">Dati anagrafici</p>
+      <div class="fields">
+        <label>Nome<input id="p-nome" autocomplete="given-name"></label>
+        <label>Cognome<input id="p-cognome" autocomplete="family-name"></label>
+        <label>Data di nascita<input type="date" id="p-nascita" autocomplete="bday"></label>
+        <label>Telefono<input type="tel" id="p-tel" autocomplete="tel" inputmode="tel"></label>
+        <label>Email<input type="email" id="p-email" autocomplete="email" autocapitalize="off" autocorrect="off"></label>
+      </div>
+      <button class="btn" id="p-save">Salva profilo</button>
+      <p class="hint">Restano solo su questo iPhone. Quando crei un report PDF puoi scegliere se aggiungerli in prima pagina, in alto a destra.</p>
+    </div>
+  </section>
+
   <!-- ======= IMPOSTAZIONI ======= -->
   <section class="view" id="v-set">
     <div class="card">
@@ -244,7 +266,7 @@ tr.tot td{font-weight:700;border-bottom:0}
         <button class="chip" data-range="all">Tutto</button>
       </div>
       <button class="btn" id="exp-pdf">Crea report PDF</button>
-      <p class="hint">Contiene riepilogo, grafico e tabella mensile, calendario, farmaci, note ed elenco degli episodi. Puoi salvarlo in File, stamparlo o inviarlo al medico.</p>
+      <p class="hint">Contiene riepilogo, grafico e tabella mensile, calendario, farmaci, note ed elenco degli episodi. Puoi salvarlo in File, stamparlo o inviarlo al medico. Se hai compilato il Profilo, ti chiede se aggiungere i tuoi dati.</p>
     </div>
     <div class="card">
       <p class="label">I miei farmaci</p>
@@ -289,10 +311,25 @@ tr.tot td{font-weight:700;border-bottom:0}
   <button data-view="v-stats">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
     Statistiche</button>
+  <button data-view="v-profile">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+    Profilo</button>
   <button data-view="v-set">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     Impostazioni</button>
 </nav>
+
+<div class="sheet-bg" id="pdf-sheet" hidden>
+  <div class="sheet">
+    <h3>Aggiungere l'anagrafica al report?</h3>
+    <p id="pdf-sheet-who"></p>
+    <button class="btn" data-anag="1">Sì, aggiungi i miei dati</button>
+    <div style="height:8px"></div>
+    <button class="btn secondary" data-anag="0">No, report senza dati</button>
+    <div style="height:8px"></div>
+    <button class="btn secondary" data-anag="">Annulla</button>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -332,7 +369,7 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 const episodesIn = (prefix) => Object.values(db.episodes).filter(e => e.date.startsWith(prefix)).sort((a,b)=>a.date.localeCompare(b.date));
 
 // ---------- navigation ----------
-const TITLES = {'v-add':'Nuovo episodio','v-cal':'Calendario','v-stats':'Statistiche','v-set':'Impostazioni'};
+const TITLES = {'v-add':'Nuovo episodio','v-cal':'Calendario','v-stats':'Statistiche','v-profile':'Profilo','v-set':'Impostazioni'};
 function show(view){
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id===view));
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===view));
@@ -340,6 +377,7 @@ function show(view){
   $('#subtitle').textContent = view==='v-add' ? '' : '';
   if (view==='v-cal') renderCal();
   if (view==='v-stats') renderStats();
+  if (view==='v-profile') renderProfile();
   if (view==='v-set') renderSettings();
   window.scrollTo(0,0);
 }
@@ -559,7 +597,7 @@ async function shareOrDownload(filename, content, type){
 }
 $('#exp-json').onclick = async () => {
   const data = {app:'diario-mal-di-testa', version:1, exportedAt:new Date().toISOString(),
-    episodes:Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date)), meds:db.meds, tags:db.tags};
+    episodes:Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date)), meds:db.meds, tags:db.tags, profile:db.profile||{}};
   if (await shareOrDownload('backup-mal-di-testa-' + todayIso() + '.json', JSON.stringify(data, null, 1), 'application/json')) {
     db.lastBackup = new Date().toISOString(); save(); renderSettings();
   }
@@ -591,6 +629,8 @@ $('#imp-file').onchange = async e => {
       meds:(ep.meds||[]).map(m=>({name:String(m.name||''), time:String(m.time||'')})).filter(m=>m.name), note:String(ep.note||'')});
     (data.meds || valid.flatMap(ep => (ep.meds||[]).map(m=>m.name))).forEach(m => { if (m && !db.meds.includes(m)) db.meds.push(m); });
     (data.tags || []).forEach(t => { if (t && !db.tags.includes(t)) db.tags.push(t); });
+    if (data.profile && typeof data.profile === 'object' && !hasProfile())
+      db.profile = Object.fromEntries(PROFILE_FIELDS.map(k => [k, String(data.profile[k] || '')]));
     save(); renderSettings(); renderForm(); toast(valid.length + ' episodi importati ✓');
   } catch(err) { alert('Impossibile leggere il file: ' + err.message); }
 };
@@ -598,6 +638,20 @@ $('#wipe').onclick = () => {
   if (!confirm('Cancellare TUTTI gli episodi? L\'operazione non si può annullare.')) return;
   if (!confirm('Sei sicuro? Ti consiglio di fare prima un backup.')) return;
   db.episodes = {}; save(); renderSettings(); resetForm(); toast('Dati cancellati');
+};
+
+// ---------- profilo ----------
+const PROFILE_FIELDS = ['nome','cognome','nascita','tel','email'];
+const hasProfile = () => PROFILE_FIELDS.some(k => (db.profile || {})[k]);
+function renderProfile(){
+  const p = db.profile || {};
+  PROFILE_FIELDS.forEach(k => $('#p-' + k).value = p[k] || '');
+  $('#p-nascita').max = todayIso();
+}
+$('#p-save').onclick = () => {
+  const p = Object.fromEntries(PROFILE_FIELDS.map(k => [k, $('#p-' + k).value.trim()]));
+  if (p.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) return toast('Controlla l\'indirizzo email');
+  db.profile = p; save(); renderProfile(); toast('Profilo salvato ✓');
 };
 
 // ---------- report PDF ----------
@@ -669,7 +723,7 @@ class Pdf {
   }
 }
 
-function buildReport(from, to){
+function buildReport(from, to, profile){
   const C = {accent:'#5b4bdb', medio:'#f5a524', forte:'#e5484d', muted:'#6e6a80', line:'#e4e1ee', soft:'#f4f2fb', text:'#1d1b26'};
   const dmy = s => s.split('-').reverse().join('/');
   const dayDiff = (a, b) => Math.round((parseIso(b) - parseIso(a)) / 864e5);
@@ -719,12 +773,27 @@ function buildReport(from, to){
   // --- intestazione e riepilogo
   newPage();
   pdf.text(M, y + 20, 'Diario Mal di Testa', {size:22, bold:true});
-  pdf.text(M + CW, y + 20, 'Report', {size:12, color:C.muted, align:'right'});
+  // anagrafica (facoltativa) in alto a destra, altrimenti la sola scritta "Report"
+  let headBottom = y + 60;
+  const who = profile ? [
+    [[profile.nome, profile.cognome].filter(Boolean).join(' '), true],
+    [profile.nascita ? 'Data di nascita: ' + dmy(profile.nascita) : ''],
+    [profile.tel ? 'Tel. ' + profile.tel : ''],
+    [profile.email || ''],
+  ].filter(([t]) => t) : [];
+  if (who.length) {
+    let ry = y + 12;
+    who.forEach(([t, bold]) => pdf.wrap(t, 200, bold ? 11 : 9, bold).forEach(ln => {
+      pdf.text(M + CW, ry, ln, {size: bold ? 11 : 9, bold, color: bold ? C.text : C.muted, align:'right'});
+      ry += bold ? 14 : 12;
+    }));
+    headBottom = Math.max(headBottom, ry - 6);
+  } else pdf.text(M + CW, y + 20, 'Report', {size:12, color:C.muted, align:'right'});
   y += 40;
   pdf.text(M, y, `Periodo: dal ${dmy(from)} al ${dmy(to)} (${nDays} ${nDays === 1 ? 'giorno' : 'giorni'})`, {size:11});
   y += 14;
   pdf.text(M, y, `Creato il ${dmy(todayIso())}`, {size:9, color:C.muted});
-  y += 6;
+  y = Math.max(y, headBottom) + 6;
 
   section('Riepilogo', 70);
   const boxes = [
@@ -883,14 +952,29 @@ function setPdfRange(r){
   $('#pdf-from').value = iso(f); $('#pdf-to').value = iso(t);
 }
 $('#pdf-quick').onclick = e => { const b = e.target.closest('[data-range]'); if (b) setPdfRange(b.dataset.range); };
+function exportPdf(withProfile){
+  const from = $('#pdf-from').value, to = $('#pdf-to').value;
+  let bytes;
+  try { bytes = buildReport(from, to, withProfile ? db.profile : null); }
+  catch (err) { return alert('Errore nella creazione del PDF: ' + err.message); }
+  shareOrDownload('report-mal-di-testa_' + from + '_' + to + '.pdf', bytes, 'application/pdf');
+}
 $('#exp-pdf').onclick = () => {
   const from = $('#pdf-from').value, to = $('#pdf-to').value;
   if (!from || !to) return toast('Scegli la data di inizio e di fine');
   if (from > to) return toast('La data di inizio è dopo la fine');
-  let bytes;
-  try { bytes = buildReport(from, to); }
-  catch (err) { return alert('Errore nella creazione del PDF: ' + err.message); }
-  shareOrDownload('report-mal-di-testa_' + from + '_' + to + '.pdf', bytes, 'application/pdf');
+  if (!hasProfile()) return exportPdf(false);
+  // la scelta si fa con dei pulsanti nella pagina (non con confirm) così iOS apre poi il menu Condividi
+  const p = db.profile;
+  $('#pdf-sheet-who').textContent = 'In prima pagina, in alto a destra: ' + [[p.nome, p.cognome].filter(Boolean).join(' '),
+    p.nascita && 'data di nascita', p.tel && 'telefono', p.email && 'email'].filter(Boolean).join(', ') + '.';
+  $('#pdf-sheet').hidden = false;
+};
+$('#pdf-sheet').onclick = e => {
+  const b = e.target.closest('[data-anag]');
+  if (!b && e.target.id !== 'pdf-sheet') return;
+  $('#pdf-sheet').hidden = true;
+  if (b && b.dataset.anag) exportPdf(b.dataset.anag === '1');
 };
 
 // ---------- init ----------

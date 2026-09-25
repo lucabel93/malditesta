@@ -7,6 +7,7 @@ Web app personale (PWA) per registrare gli episodi di mal di testa da iPhone.
 - Funziona offline grazie a `sw.js`
 - Backup/ripristino in JSON ed esportazione CSV per Excel dalla schermata Impostazioni
 - Report PDF per un periodo a scelta (dal/al) con riepilogo, grafico, tabella mensile, calendario, farmaci, note ed elenco episodi, generato sul telefono senza librerie esterne
+- Profilo (nome, cognome, data di nascita, telefono, email): alla creazione del PDF l'app chiede se aggiungerlo in prima pagina
 
 ## Installazione su iPhone
 1. Apri `https://lucabel93.github.io/malditesta/` con **Safari**
