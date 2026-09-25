@@ -10,8 +10,8 @@
 <meta name="theme-color" content="#f4f2fb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16141f" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="app-icon-180.png">
-<link rel="icon" type="image/png" href="app-icon-192.png">
+<link rel="apple-touch-icon" href="logo-180.png">
+<link rel="icon" type="image/png" href="logo-192.png">
 <title>Diario Mal di Testa</title>
 <style>
 :root{
@@ -1091,7 +1091,7 @@ $('#nt-test').onclick = async () => {
   catch { notifyMessages = ["Piccola Stella, hai avuto mal di testa oggi? Segnalo nell'app!!"]; }
   const reg = await navigator.serviceWorker.ready;
   await reg.showNotification('Diario Mal di Testa', {body: notifyMessages[Math.floor(Math.random() * notifyMessages.length)],
-    icon:'app-icon-192.png', badge:'app-icon-192.png', tag:'promemoria'});
+    icon:'logo-192.png', badge:'logo-192.png', tag:'promemoria'});
   toast('Notifica inviata: guarda in alto!');
 };
 
