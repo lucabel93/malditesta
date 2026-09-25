@@ -1,5 +1,5 @@
 // Cache per l'uso offline. Cambia VERSION quando aggiorni l'app.
-const VERSION = 'mdt-v1';
+const VERSION = 'mdt-v2';
 const FILES = ['./', 'index.html', 'manifest.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

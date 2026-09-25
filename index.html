@@ -63,6 +63,8 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
 .icon-btn{width:40px;height:40px;border-radius:10px;background:var(--forte-soft);color:var(--forte);font-size:20px;line-height:1}
 .hint{color:var(--muted);font-size:13px;margin:6px 0 0}
 .date-row{display:grid;grid-template-columns:1fr auto auto;gap:8px}
+.date-range{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.date-range label{font-size:13px;color:var(--muted);font-weight:600;display:flex;flex-direction:column;gap:4px}
 .banner{background:var(--accent-soft);color:var(--accent);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px;font-weight:500}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);
@@ -229,6 +231,21 @@ tr.tot td{font-weight:700;border-bottom:0}
 
   <!-- ======= IMPOSTAZIONI ======= -->
   <section class="view" id="v-set">
+    <div class="card">
+      <p class="label">Report PDF</p>
+      <div class="date-range">
+        <label>Dal<input type="date" id="pdf-from"></label>
+        <label>Al<input type="date" id="pdf-to"></label>
+      </div>
+      <div class="chips" id="pdf-quick" style="margin:10px 0 12px">
+        <button class="chip" data-range="1">Ultimo mese</button>
+        <button class="chip" data-range="3">Ultimi 3 mesi</button>
+        <button class="chip" data-range="year">Anno in corso</button>
+        <button class="chip" data-range="all">Tutto</button>
+      </div>
+      <button class="btn" id="exp-pdf">Crea report PDF</button>
+      <p class="hint">Contiene riepilogo, grafico e tabella mensile, calendario, farmaci, note ed elenco degli episodi. Puoi salvarlo in File, stamparlo o inviarlo al medico.</p>
+    </div>
     <div class="card">
       <p class="label">I miei farmaci</p>
       <div id="set-meds"></div>
@@ -511,6 +528,7 @@ function renderList(sel, arr, kind){
   };
 }
 function renderSettings(){
+  if (!$('#pdf-from').value) setPdfRange(3);
   renderList('#set-meds', db.meds, 'med');
   renderList('#set-tags', db.tags, 'tag');
   const n = Object.keys(db.episodes).length;
@@ -580,6 +598,299 @@ $('#wipe').onclick = () => {
   if (!confirm('Cancellare TUTTI gli episodi? L\'operazione non si può annullare.')) return;
   if (!confirm('Sei sicuro? Ti consiglio di fare prima un backup.')) return;
   db.episodes = {}; save(); renderSettings(); resetForm(); toast('Dati cancellati');
+};
+
+// ---------- report PDF ----------
+// Generatore PDF minimale (A4, font Helvetica standard del PDF): nessuna libreria esterna, funziona offline.
+const HELV = [278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const HELVB = [278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+const WINANSI = {'€':128,'…':133,'‘':145,'’':146,'“':147,'”':148,'•':149,'–':150,'—':151};
+function winCode(ch){
+  const c = ch.charCodeAt(0);
+  if (WINANSI[ch]) return WINANSI[ch];
+  return (c>=32 && c<127) || (c>=160 && c<256) ? c : 63;
+}
+function charW(c, bold){
+  if (c>=32 && c<127) return (bold ? HELVB : HELV)[c-32];
+  const special = {128:556,133:1000,145:bold?278:222,146:bold?278:222,147:bold?500:333,148:bold?500:333,149:350,150:556,151:1000,176:400,183:278};
+  return special[c] || ((c>=204 && c<=207) || (c>=236 && c<=239) ? 278 : 556);
+}
+const pdfNum = n => String(Math.round(n*100)/100);
+const pdfRgb = hex => { const n = parseInt(hex.slice(1),16); return [n>>16, n>>8&255, n&255].map(v => pdfNum(v/255)).join(' '); };
+
+class Pdf {
+  constructor(){ this.W = 595.28; this.H = 841.89; this.pages = []; }
+  addPage(){ this.ops = []; this.pages.push(this.ops); }
+  width(s, size, bold){ let w = 0; for (const ch of String(s)) w += charW(winCode(ch), bold); return w * size / 1000; }
+  // y = linea di base del testo, misurata dall'alto della pagina
+  text(x, y, s, o = {}){
+    const size = o.size || 10;
+    if (o.align === 'right') x -= this.width(s, size, o.bold);
+    else if (o.align === 'center') x -= this.width(s, size, o.bold) / 2;
+    let str = '';
+    for (const ch of String(s)){
+      const c = winCode(ch);
+      str += c===40 || c===41 || c===92 ? '\\' + String.fromCharCode(c) : c < 128 ? String.fromCharCode(c) : '\\' + c.toString(8).padStart(3,'0');
+    }
+    this.ops.push(`BT /${o.bold ? 'F2' : 'F1'} ${size} Tf ${pdfRgb(o.color || '#1d1b26')} rg ${pdfNum(x)} ${pdfNum(this.H - y)} Td (${str}) Tj ET`);
+  }
+  rect(x, y, w, h, fill){ this.ops.push(`${pdfRgb(fill)} rg ${pdfNum(x)} ${pdfNum(this.H - y - h)} ${pdfNum(w)} ${pdfNum(h)} re f`); }
+  line(x1, y1, x2, y2, color, lw){ this.ops.push(`${pdfRgb(color)} RG ${lw} w ${pdfNum(x1)} ${pdfNum(this.H - y1)} m ${pdfNum(x2)} ${pdfNum(this.H - y2)} l S`); }
+  wrap(s, maxW, size, bold){
+    const lines = []; let cur = '';
+    String(s).split(/\s+/).filter(Boolean).forEach(word => {
+      while (this.width(word, size, bold) > maxW && word.length > 1){
+        let i = word.length - 1; while (i > 1 && this.width(word.slice(0,i), size, bold) > maxW) i--;
+        if (cur) { lines.push(cur); cur = ''; }
+        lines.push(word.slice(0,i)); word = word.slice(i);
+      }
+      const next = cur ? cur + ' ' + word : word;
+      if (this.width(next, size, bold) > maxW && cur) { lines.push(cur); cur = word; } else cur = next;
+    });
+    if (cur) lines.push(cur);
+    return lines.length ? lines : [''];
+  }
+  output(){
+    const objs = ['<< /Type /Catalog /Pages 2 0 R >>',
+      `<< /Type /Pages /Kids [${this.pages.map((_,i) => (5+2*i) + ' 0 R').join(' ')}] /Count ${this.pages.length} >>`,
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'];
+    this.pages.forEach((ops, i) => {
+      const stream = ops.join('\n');
+      objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${this.W} ${this.H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6+2*i} 0 R >>`);
+      objs.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    });
+    let out = '%PDF-1.4\n'; const offs = [];
+    objs.forEach((o, i) => { offs.push(out.length); out += `${i+1} 0 obj\n${o}\nendobj\n`; });
+    const xref = out.length;
+    out += `xref\n0 ${objs.length+1}\n0000000000 65535 f \n` + offs.map(o => String(o).padStart(10,'0') + ' 00000 n \n').join('');
+    out += `trailer\n<< /Size ${objs.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return new TextEncoder().encode(out); // il contenuto è tutto ASCII: lunghezze e offset coincidono con i byte
+  }
+}
+
+function buildReport(from, to){
+  const C = {accent:'#5b4bdb', medio:'#f5a524', forte:'#e5484d', muted:'#6e6a80', line:'#e4e1ee', soft:'#f4f2fb', text:'#1d1b26'};
+  const dmy = s => s.split('-').reverse().join('/');
+  const dayDiff = (a, b) => Math.round((parseIso(b) - parseIso(a)) / 864e5);
+  const num = n => n.toLocaleString('it-IT', {maximumFractionDigits:1});
+  const eps = Object.values(db.episodes).filter(e => e.date >= from && e.date <= to).sort((a,b) => a.date.localeCompare(b.date));
+  const nDays = dayDiff(from, to) + 1;
+  const pdf = new Pdf(), M = 40, CW = pdf.W - 2*M;
+  let y;
+  const newPage = () => { pdf.addPage(); y = M; };
+  const need = h => { if (y + h > pdf.H - 50) newPage(); };
+  // il titolo di sezione va a pagina nuova se non c'è spazio anche per un po' di contenuto
+  const section = (title, minH) => {
+    need(34 + (minH || 0)); y += 10;
+    pdf.text(M, y + 10, title.toUpperCase(), {size:10, bold:true, color:C.accent});
+    y += 15; pdf.line(M, y, M + CW, y, C.line, 0.8); y += 8;
+  };
+  const table = (cols, rows) => {
+    const head = () => {
+      need(20); let x = M;
+      cols.forEach(c => { pdf.text(c.align === 'right' ? x + c.w - 4 : x + 4, y + 11, c.t, {size:8, bold:true, color:C.muted, align:c.align}); x += c.w; });
+      y += 16; pdf.line(M, y, M + CW, y, C.line, 0.8);
+    };
+    head();
+    rows.forEach(r => {
+      const lines = r.cells.map((v, i) => {
+        const cell = typeof v === 'object' ? v : {t:v};
+        return cols[i].wrap ? pdf.wrap(cell.t, cols[i].w - 8 - (cell.dot ? 11 : 0), 9, r.bold) : [String(cell.t)];
+      });
+      const h = Math.max(...lines.map(l => l.length)) * 11 + 6;
+      if (y + h > pdf.H - 50) { newPage(); head(); }
+      let x = M;
+      r.cells.forEach((v, i) => {
+        const c = cols[i], cell = typeof v === 'object' ? v : {t:v};
+        let tx = c.align === 'right' ? x + c.w - 4 : x + 4;
+        if (cell.dot) { pdf.rect(tx, y + 5, 7, 7, cell.dot); tx += 11; }
+        lines[i].forEach((ln, j) => pdf.text(tx, y + 12 + j*11, ln, {size:9, bold:r.bold, align:c.align}));
+        x += c.w;
+      });
+      y += h; pdf.line(M, y, M + CW, y, C.line, 0.5);
+    });
+  };
+
+  const forti = eps.filter(e => e.intensity === 'Forte').length;
+  const medDays = eps.filter(e => e.meds.length).length;
+  const medsTot = eps.reduce((a, e) => a + e.meds.length, 0);
+
+  // --- intestazione e riepilogo
+  newPage();
+  pdf.text(M, y + 20, 'Diario Mal di Testa', {size:22, bold:true});
+  pdf.text(M + CW, y + 20, 'Report', {size:12, color:C.muted, align:'right'});
+  y += 40;
+  pdf.text(M, y, `Periodo: dal ${dmy(from)} al ${dmy(to)} (${nDays} ${nDays === 1 ? 'giorno' : 'giorni'})`, {size:11});
+  y += 14;
+  pdf.text(M, y, `Creato il ${dmy(todayIso())}`, {size:9, color:C.muted});
+  y += 6;
+
+  section('Riepilogo', 70);
+  const boxes = [
+    [eps.length, 'giorni con mal di testa', `${num(eps.length / nDays * 100)}% dei giorni`],
+    [forti, 'giorni forti', `${eps.length - forti} medi`],
+    [medDays, 'giorni con farmaci', `${num(medDays / nDays * 100)}% dei giorni`],
+    [medsTot, 'farmaci assunti', `${num(medsTot / nDays * 30)} ogni 30 giorni`],
+  ];
+  const bw = (CW - 3*8) / 4;
+  boxes.forEach(([n, l, sub], i) => {
+    const x = M + i * (bw + 8);
+    pdf.rect(x, y, bw, 60, C.soft);
+    pdf.text(x + 10, y + 24, String(n), {size:20, bold:true, color: i === 1 ? C.forte : C.text});
+    pdf.text(x + 10, y + 39, l, {size:8.5});
+    pdf.text(x + 10, y + 51, sub, {size:8, color:C.muted});
+  });
+  y += 72;
+  pdf.text(M, y + 4, `In media ${num(eps.length / nDays * 30)} giorni di mal di testa e ${num(medDays / nDays * 30)} giorni con farmaci ogni 30 giorni.`, {size:9.5});
+  y += 10;
+
+  if (!eps.length) {
+    y += 20; pdf.text(M, y, 'Nessun episodio registrato nel periodo scelto.', {size:11, color:C.muted});
+  } else {
+    // --- dati per mese
+    const months = [];
+    const f0 = parseIso(from);
+    for (let d = new Date(f0.getFullYear(), f0.getMonth(), 1); iso(d) <= to; d.setMonth(d.getMonth() + 1)) {
+      const key = iso(d).slice(0,7), last = iso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+      const start = iso(d) < from ? from : iso(d), end = last > to ? to : last;
+      const me = eps.filter(e => e.date.startsWith(key));
+      months.push({key, y:d.getFullYear(), m:d.getMonth(), partial: start !== iso(d) || end !== last, inRange: dayDiff(start, end) + 1,
+        start, end, days: me.length, forti: me.filter(e => e.intensity === 'Forte').length,
+        medDays: me.filter(e => e.meds.length).length, meds: me.reduce((a, e) => a + e.meds.length, 0)});
+    }
+    const multiYear = months[0].y !== months[months.length - 1].y;
+    const short = mo => MESI[mo.m].slice(0,3) + (multiYear ? ' ' + String(mo.y).slice(2) : '');
+
+    // --- grafico
+    section('Andamento mensile', 170);
+    const max = Math.max(1, ...months.map(mo => Math.max(mo.days, mo.meds)));
+    const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    const step = Math.max(1, [1,2,5,10].map(k => k*p).find(s => s >= raw));
+    const top = Math.ceil(max / step) * step;
+    const gx = M + 22, gw = CW - 22, gy = y + 8, gh = 120;
+    for (let v = 0; v <= top; v += step) {
+      const ly = gy + gh - v / top * gh;
+      pdf.line(gx, ly, gx + gw, ly, C.line, 0.5);
+      pdf.text(gx - 5, ly + 3, String(v), {size:7, color:C.muted, align:'right'});
+    }
+    const sw = gw / months.length, bar = Math.min(16, sw * 0.34), labelEvery = Math.ceil(months.length / 18);
+    months.forEach((mo, i) => {
+      const cx = gx + sw * i + sw / 2, x1 = cx - bar - 1, x2 = cx + 1;
+      const hM = (mo.days - mo.forti) / top * gh, hF = mo.forti / top * gh, hD = mo.meds / top * gh;
+      if (hF) pdf.rect(x1, gy + gh - hF, bar, hF, C.forte);
+      if (hM) pdf.rect(x1, gy + gh - hF - hM, bar, hM, C.medio);
+      if (hD) pdf.rect(x2, gy + gh - hD, bar, hD, C.accent);
+      if (sw >= 18) {
+        if (mo.days) pdf.text(x1 + bar/2, gy + gh - hF - hM - 3, String(mo.days), {size:6.5, color:C.muted, align:'center'});
+        if (mo.meds) pdf.text(x2 + bar/2, gy + gh - hD - 3, String(mo.meds), {size:6.5, color:C.muted, align:'center'});
+      }
+      if (i % labelEvery === 0) pdf.text(cx, gy + gh + 11, short(mo), {size:7, color:C.muted, align:'center'});
+    });
+    y = gy + gh + 24;
+    [[C.medio, 'Giorni medi'], [C.forte, 'Giorni forti'], [C.accent, 'Farmaci assunti']].reduce((x, [c, l]) => {
+      pdf.rect(x, y - 7, 8, 8, c); pdf.text(x + 12, y, l, {size:8, color:C.muted});
+      return x + 22 + pdf.width(l, 8);
+    }, M);
+    y += 6;
+
+    // --- tabella mensile
+    section('Riepilogo mensile', 60);
+    const rows = months.map(mo => ({cells: [MESI[mo.m] + ' ' + mo.y + (mo.partial ? ' *' : ''), mo.days, mo.days - mo.forti, mo.forti, mo.medDays, mo.meds, num(mo.days / mo.inRange * 100) + '%']}));
+    rows.push({bold:true, cells: ['Totale', eps.length, eps.length - forti, forti, medDays, medsTot, num(eps.length / nDays * 100) + '%']});
+    table([{t:'Mese', w:125}, {t:'Giorni MdT', w:70, align:'right'}, {t:'Medi', w:55, align:'right'}, {t:'Forti', w:55, align:'right'},
+      {t:'Gg con farmaci', w:80, align:'right'}, {t:'Farmaci', w:65, align:'right'}, {t:'% giorni', w:CW - 450, align:'right'}], rows);
+    if (months.some(mo => mo.partial)) { y += 12; pdf.text(M, y, '* mese compreso solo in parte nel periodo scelto', {size:7.5, color:C.muted}); }
+
+    // --- calendario
+    section('Calendario', Math.min(months.length * 19 + 20, 600));
+    const lw = 62, cw = (CW - lw - 34) / 31, ch = 15;
+    months.forEach(mo => {
+      need(ch + 4);
+      pdf.text(M, y + 11, MESI[mo.m].slice(0,3) + ' ' + mo.y, {size:8.5, bold:true});
+      const dim = new Date(mo.y, mo.m + 1, 0).getDate();
+      for (let d = 1; d <= dim; d++) {
+        const k = mo.key + '-' + pad(d), e = db.episodes[k], x = M + lw + (d - 1) * cw;
+        if (k < from || k > to) continue;
+        const fill = e ? (e.intensity === 'Forte' ? C.forte : C.medio) : C.soft;
+        pdf.rect(x + 0.6, y, cw - 1.2, ch, fill);
+        pdf.text(x + cw / 2, y + 10, String(d), {size:6, color: e ? '#ffffff' : C.muted, align:'center', bold: !!e});
+      }
+      pdf.text(M + CW, y + 11, String(mo.days), {size:8.5, bold:true, align:'right'});
+      y += ch + 4;
+    });
+    y += 8;
+    [[C.medio, 'Medio'], [C.forte, 'Forte'], [C.soft, 'Senza mal di testa']].reduce((x, [c, l]) => {
+      pdf.rect(x, y - 7, 8, 8, c); pdf.text(x + 12, y, l, {size:8, color:C.muted});
+      return x + 22 + pdf.width(l, 8);
+    }, M);
+    pdf.text(M + CW, y, 'a destra: giorni con mal di testa nel mese', {size:7.5, color:C.muted, align:'right'});
+    y += 4;
+
+    // --- farmaci
+    const byMed = {};
+    eps.forEach(e => {
+      e.meds.forEach(m => { const s = byMed[m.name] || (byMed[m.name] = {n:0, days:new Set()}); s.n++; s.days.add(e.date); });
+    });
+    const medRows = Object.entries(byMed).sort((a, b) => b[1].n - a[1].n);
+    if (medRows.length) {
+      section('Farmaci', 40);
+      const mmax = medRows[0][1].n, nameW = 130, barW = CW - nameW - 150;
+      medRows.forEach(([name, s]) => {
+        need(16);
+        pdf.text(M, y + 10, name, {size:9, bold:true});
+        pdf.rect(M + nameW, y + 3, Math.max(2, s.n / mmax * barW), 8, C.accent);
+        pdf.text(M + CW, y + 10, `${s.n} ${s.n === 1 ? 'volta' : 'volte'} in ${s.days.size} ${s.days.size === 1 ? 'giorno' : 'giorni'}`, {size:9, align:'right'});
+        y += 16;
+      });
+    }
+
+    // --- note
+    const byNote = {};
+    eps.forEach(e => new Set((e.note || '').split(/\s*[,;]\s*/).filter(Boolean)).forEach(n => byNote[n] = (byNote[n] || 0) + 1));
+    const noteRows = Object.entries(byNote).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    if (noteRows.length) {
+      section('Note, sintomi e trigger', 40);
+      table([{t:'Nota', w:CW - 90, wrap:true}, {t:'Giorni', w:90, align:'right'}], noteRows.map(([n, c]) => ({cells:[n, c]})));
+    }
+
+    // --- elenco episodi
+    section('Elenco episodi', 40);
+    table([{t:'Data', w:90}, {t:'Intensità', w:62}, {t:'Farmaci (orario)', w:200, wrap:true}, {t:'Note', w:CW - 352, wrap:true}],
+      eps.map(e => ({cells: [
+        parseIso(e.date).toLocaleDateString('it-IT', {weekday:'short'}) + ' ' + dmy(e.date),
+        {t:e.intensity, dot: e.intensity === 'Forte' ? C.forte : C.medio},
+        e.meds.length ? e.meds.map(m => m.name + (m.time ? ' (' + m.time + ')' : '')).join(', ') : '—',
+        e.note || '',
+      ]})));
+  }
+
+  // --- piè di pagina
+  pdf.pages.forEach((ops, i) => {
+    pdf.ops = ops;
+    pdf.line(M, pdf.H - 34, M + CW, pdf.H - 34, C.line, 0.5);
+    pdf.text(M, pdf.H - 22, `Diario Mal di Testa · dal ${dmy(from)} al ${dmy(to)}`, {size:7.5, color:C.muted});
+    pdf.text(M + CW, pdf.H - 22, `Pagina ${i + 1} di ${pdf.pages.length}`, {size:7.5, color:C.muted, align:'right'});
+  });
+  return pdf.output();
+}
+
+function setPdfRange(r){
+  const t = new Date(); let f;
+  if (r === 'year') f = new Date(t.getFullYear(), 0, 1);
+  else if (r === 'all') { const first = Object.keys(db.episodes).sort()[0]; f = first ? parseIso(first) : new Date(t.getFullYear(), 0, 1); }
+  else f = new Date(t.getFullYear(), t.getMonth() - Number(r), t.getDate() + 1);
+  $('#pdf-from').value = iso(f); $('#pdf-to').value = iso(t);
+}
+$('#pdf-quick').onclick = e => { const b = e.target.closest('[data-range]'); if (b) setPdfRange(b.dataset.range); };
+$('#exp-pdf').onclick = () => {
+  const from = $('#pdf-from').value, to = $('#pdf-to').value;
+  if (!from || !to) return toast('Scegli la data di inizio e di fine');
+  if (from > to) return toast('La data di inizio è dopo la fine');
+  let bytes;
+  try { bytes = buildReport(from, to); }
+  catch (err) { return alert('Errore nella creazione del PDF: ' + err.message); }
+  shareOrDownload('report-mal-di-testa_' + from + '_' + to + '.pdf', bytes, 'application/pdf');
 };
 
 // ---------- init ----------
