@@ -1,0 +1,6 @@
+# Mai caricare dati personali nel repository
+*.json
+!manifest.json
+*.csv
+*.xlsx
+.claude/

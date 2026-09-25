@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Mal di Testa">
+<meta name="theme-color" content="#f4f2fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16141f" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>Diario Mal di Testa</title>
+<style>
+:root{
+  --bg:#f4f2fb; --card:#ffffff; --text:#1d1b26; --muted:#6e6a80; --line:#e4e1ee;
+  --accent:#5b4bdb; --accent-soft:#e9e6fb; --medio:#f5a524; --medio-soft:#fdf0d9;
+  --forte:#e5484d; --forte-soft:#fbe1e2; --ok:#2f9e6b;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#16141f; --card:#211f2d; --text:#f0eef7; --muted:#9c98ad; --line:#34313f;
+    --accent:#8d80f5; --accent-soft:#2e2a4a; --medio:#f5b04a; --medio-soft:#3f3220;
+    --forte:#ff6b70; --forte-soft:#46252a;
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) 0 calc(72px + env(safe-area-inset-bottom))}
+header{padding:14px 16px 4px}
+header h1{margin:0;font-size:28px;letter-spacing:-.5px}
+header p{margin:2px 0 0;color:var(--muted);font-size:14px}
+main{padding:8px 16px 24px;max-width:640px;margin:0 auto}
+.view{display:none}.view.active{display:block}
+.card{background:var(--card);border-radius:var(--radius);padding:14px;margin-bottom:12px;border:1px solid var(--line)}
+.label{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin:0 0 8px}
+.row{display:flex;gap:8px;align-items:center}
+.row.wrap{flex-wrap:wrap}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+.btn{background:var(--accent);color:#fff;border-radius:12px;padding:14px 16px;font-weight:600;width:100%;font-size:17px}
+.btn.secondary{background:var(--accent-soft);color:var(--accent)}
+.btn.danger{background:var(--forte-soft);color:var(--forte)}
+.btn.small{width:auto;padding:9px 14px;font-size:15px}
+.btn:active{opacity:.75}
+input,select,textarea{font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);
+  border-radius:10px;padding:10px 12px;width:100%;min-height:44px}
+textarea{min-height:70px;resize:vertical}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
+.seg{display:flex;background:var(--bg);border-radius:12px;padding:4px;gap:4px;border:1px solid var(--line)}
+.seg button{flex:1;padding:11px 6px;border-radius:9px;font-weight:600;color:var(--muted)}
+.seg button.on[data-v="Medio"]{background:var(--medio);color:#fff}
+.seg button.on[data-v="Forte"]{background:var(--forte);color:#fff}
+.seg button.on:not([data-v]){background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:8px 12px;border-radius:999px;background:var(--bg);border:1px solid var(--line);font-size:14px;font-weight:500}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.add{border-style:dashed;color:var(--accent)}
+.med{display:grid;grid-template-columns:1fr 110px 40px;gap:8px;margin-bottom:8px;align-items:center}
+.icon-btn{width:40px;height:40px;border-radius:10px;background:var(--forte-soft);color:var(--forte);font-size:20px;line-height:1}
+.hint{color:var(--muted);font-size:13px;margin:6px 0 0}
+.date-row{display:grid;grid-template-columns:1fr auto auto;gap:8px}
+.banner{background:var(--accent-soft);color:var(--accent);border-radius:12px;padding:10px 12px;font-size:14px;margin-bottom:12px;font-weight:500}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:10}
+nav.tabs button{flex:1;padding:8px 0 6px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);font-weight:500}
+nav.tabs button svg{width:26px;height:26px}
+nav.tabs button.on{color:var(--accent)}
+
+.cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-head h2{margin:0;font-size:20px;text-transform:capitalize}
+.cal-head button{width:40px;height:40px;border-radius:10px;background:var(--bg);font-size:20px;color:var(--accent)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dow{text-align:center;font-size:12px;color:var(--muted);font-weight:600;padding-bottom:4px}
+.cal .d{aspect-ratio:1;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:15px;font-weight:500;position:relative;background:var(--bg)}
+.cal .d.empty{background:none}
+.cal .d.Medio{background:var(--medio);color:#fff}
+.cal .d.Forte{background:var(--forte);color:#fff}
+.cal .d.today{outline:2px solid var(--accent);outline-offset:-2px}
+.cal .d .pills{font-size:9px;line-height:1;margin-top:2px;opacity:.95}
+.cal .d.future{opacity:.4}
+.legend{display:flex;gap:14px;font-size:13px;color:var(--muted);margin-top:10px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+.stats3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--bg);border-radius:12px;padding:10px;text-align:center}
+.stat b{display:block;font-size:24px;font-variant-numeric:tabular-nums}
+.stat small{color:var(--muted);font-size:12px}
+.ep{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line);cursor:pointer}
+.ep:first-child{border-top:0}
+.ep .day{min-width:44px;text-align:center;border-radius:10px;padding:6px 0;font-weight:700;color:#fff}
+.ep .day small{display:block;font-size:11px;font-weight:500;opacity:.9;text-transform:capitalize}
+.ep .day.Medio{background:var(--medio)}.ep .day.Forte{background:var(--forte)}
+.ep .info{flex:1;min-width:0;font-size:14px}
+.ep .info .meds{font-weight:600}
+.ep .info .note{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{padding:8px 4px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:600;font-size:12px}
+tr.tot td{font-weight:700;border-bottom:0}
+.bars{display:flex;align-items:flex-end;gap:4px;height:140px;padding-top:16px}
+.bars .b{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px}
+.bars .col{width:100%;border-radius:5px 5px 2px 2px;background:var(--accent);min-height:2px;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
+.bars .col .f{background:var(--forte)}
+.bars .v{font-size:11px;font-weight:600;color:var(--muted)}
+.bars .m{font-size:10px;color:var(--muted)}
+.hbar{display:grid;grid-template-columns:120px 1fr 32px;gap:8px;align-items:center;font-size:14px;margin:6px 0}
+.hbar .t{height:10px;border-radius:5px;background:var(--accent)}
+.hbar .n{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.list-item{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)}
+.list-item:first-child{border-top:0}
+.list-item .x{color:var(--forte);font-size:14px;padding:6px 8px}
+.list-item .mv{color:var(--muted);padding:6px 8px}
+.toast{position:fixed;left:50%;bottom:calc(90px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);
+  background:var(--text);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:15px;font-weight:500;opacity:0;
+  transition:.25s;pointer-events:none;z-index:20;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty-msg{color:var(--muted);text-align:center;padding:14px 0;font-size:14px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1 id="title">Nuovo episodio</h1>
+  <p id="subtitle"></p>
+</header>
+
+<main>
+  <!-- ======= INSERIMENTO ======= -->
+  <section class="view active" id="v-add">
+    <div class="banner" id="edit-banner" hidden>Stai modificando un episodio già registrato</div>
+
+    <div class="card">
+      <p class="label">Giorno</p>
+      <div class="date-row">
+        <input type="date" id="f-date">
+        <button class="btn secondary small" data-quick="0">Oggi</button>
+        <button class="btn secondary small" data-quick="-1">Ieri</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Intensità</p>
+      <div class="seg" id="f-int">
+        <button data-v="Medio">Medio</button>
+        <button data-v="Forte">Forte</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="label">Farmaci assunti</p>
+      <div id="f-meds"></div>
+      <div class="chips" id="f-medchips"></div>
+      <p class="hint">Tocca un farmaco per aggiungerlo con l'ora attuale. Puoi correggere l'orario.</p>
+    </div>
+
+    <div class="card">
+      <p class="label">Note / sintomi / trigger</p>
+      <div class="chips" id="f-tags" style="margin-bottom:10px"></div>
+      <textarea id="f-note" placeholder="Altre note (facoltativo)"></textarea>
+    </div>
+
+    <button class="btn" id="f-save">Salva episodio</button>
+    <div style="height:10px"></div>
+    <button class="btn danger" id="f-del" hidden>Elimina episodio</button>
+    <button class="btn secondary" id="f-cancel" hidden style="margin-top:10px">Annulla</button>
+  </section>
+
+  <!-- ======= CALENDARIO ======= -->
+  <section class="view" id="v-cal">
+    <div class="card">
+      <div class="cal-head">
+        <button id="c-prev" aria-label="Mese precedente">‹</button>
+        <h2 id="c-title"></h2>
+        <button id="c-next" aria-label="Mese successivo">›</button>
+      </div>
+      <div class="cal" id="c-grid"></div>
+      <div class="legend">
+        <span style="--c:var(--medio)">Medio</span>
+        <span style="--c:var(--forte)">Forte</span>
+        <span style="color:var(--muted)">• = n. farmaci</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="stats3" id="c-stats"></div>
+    </div>
+    <div class="card">
+      <p class="label">Episodi del mese</p>
+      <div id="c-list"></div>
+    </div>
+  </section>
+
+  <!-- ======= STATISTICHE ======= -->
+  <section class="view" id="v-stats">
+    <div class="card">
+      <div class="cal-head">
+        <button id="s-prev" aria-label="Anno precedente">‹</button>
+        <h2 id="s-title"></h2>
+        <button id="s-next" aria-label="Anno successivo">›</button>
+      </div>
+      <div class="stats3" id="s-top"></div>
+    </div>
+    <div class="card">
+      <p class="label">Giorni di mal di testa per mese</p>
+      <div class="bars" id="s-bars"></div>
+      <div class="legend">
+        <span style="--c:var(--accent)">Medio</span>
+        <span style="--c:var(--forte)">Forte</span>
+      </div>
+    </div>
+    <div class="card">
+      <p class="label">Riepilogo mensile</p>
+      <table id="s-table"></table>
+    </div>
+    <div class="card">
+      <p class="label">Farmaci usati nell'anno</p>
+      <div id="s-meds"></div>
+    </div>
+    <div class="card">
+      <p class="label">Ultimi 30 giorni</p>
+      <div class="stats3" id="s-30"></div>
+    </div>
+  </section>
+
+  <!-- ======= IMPOSTAZIONI ======= -->
+  <section class="view" id="v-set">
+    <div class="card">
+      <p class="label">I miei farmaci</p>
+      <div id="set-meds"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="set-med-new" placeholder="Nuovo farmaco" autocapitalize="characters">
+        <button class="btn small" id="set-med-add">Aggiungi</button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="label">Note rapide</p>
+      <div id="set-tags"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="set-tag-new" placeholder="Es. Stress, Poco sonno…">
+        <button class="btn small" id="set-tag-add">Aggiungi</button>
+      </div>
+    </div>
+    <div class="card">
+      <p class="label">Dati e backup</p>
+      <button class="btn secondary" id="exp-csv">Esporta per Excel (CSV)</button>
+      <div style="height:8px"></div>
+      <button class="btn secondary" id="exp-json">Salva backup</button>
+      <div style="height:8px"></div>
+      <button class="btn secondary" id="imp-json">Ripristina / importa backup</button>
+      <input type="file" id="imp-file" accept=".json,application/json" hidden>
+      <p class="hint" id="backup-info"></p>
+    </div>
+    <div class="card">
+      <button class="btn danger" id="wipe">Cancella tutti i dati</button>
+      <p class="hint">I dati restano solo su questo iPhone, non vengono inviati a nessun server. Fai un backup ogni tanto (es. salvandolo su iCloud Drive).</p>
+    </div>
+  </section>
+</main>
+
+<nav class="tabs">
+  <button data-view="v-add" class="on">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+    Nuovo</button>
+  <button data-view="v-cal">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+    Calendario</button>
+  <button data-view="v-stats">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
+    Statistiche</button>
+  <button data-view="v-set">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    Impostazioni</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const KEY = 'mdt-data-v1';
+const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+const DOW = ['Lun','Mar','Mer','Gio','Ven','Sab','Dom'];
+const DEFAULT_MEDS = ['INDOXEN','BRUFEN 600','RELPAX','SUMATRIPTAN','ALMOGRAM','BUSCOFEN 400','MOMENT 400','TACHIPIRINA 1000'];
+const DEFAULT_TAGS = ['Ciclo','Vomito','Nausea','Aura','Stress','Poco sonno'];
+
+// ---------- storage ----------
+function load(){
+  try{
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && d.episodes) return d;
+  }catch(e){}
+  return {episodes:{}, meds:DEFAULT_MEDS.slice(), tags:DEFAULT_TAGS.slice(), lastBackup:null};
+}
+let db = load();
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch(e){ alert('Errore nel salvataggio dei dati: ' + e.message); }
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+
+// ---------- utils ----------
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,'0');
+const iso = d => d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const todayIso = () => iso(new Date());
+const parseIso = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); };
+const nowTime = () => { const d=new Date(); return pad(d.getHours())+':'+pad(d.getMinutes()); };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmtDate(s, opts){ return parseIso(s).toLocaleDateString('it-IT', opts || {weekday:'long', day:'numeric', month:'long'}); }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),1800); }
+const episodesIn = (prefix) => Object.values(db.episodes).filter(e => e.date.startsWith(prefix)).sort((a,b)=>a.date.localeCompare(b.date));
+
+// ---------- navigation ----------
+const TITLES = {'v-add':'Nuovo episodio','v-cal':'Calendario','v-stats':'Statistiche','v-set':'Impostazioni'};
+function show(view){
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id===view));
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.view===view));
+  $('#title').textContent = view==='v-add' && editing ? 'Modifica episodio' : TITLES[view];
+  $('#subtitle').textContent = view==='v-add' ? '' : '';
+  if (view==='v-cal') renderCal();
+  if (view==='v-stats') renderStats();
+  if (view==='v-set') renderSettings();
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => {
+  if (b.dataset.view==='v-add' && editing) resetForm();
+  show(b.dataset.view);
+});
+
+// ---------- form ----------
+let form, editing = null;
+function resetForm(date){
+  editing = null;
+  form = {date: date || todayIso(), intensity:'Medio', meds:[], tags:[], note:''};
+  const existing = db.episodes[form.date];
+  if (existing) return loadForm(existing);
+  renderForm();
+}
+function loadForm(ep){
+  editing = ep.date;
+  const tags = [], rest = [];
+  (ep.note||'').split(/\s*[,;]\s*/).filter(Boolean).forEach(p => (db.tags.includes(p) ? tags : rest).push(p));
+  form = {date:ep.date, intensity:ep.intensity, meds:ep.meds.map(m=>({...m})), tags, note:rest.join(', ')};
+  renderForm();
+}
+function renderForm(){
+  $('#f-date').value = form.date;
+  $('#f-date').max = todayIso();
+  document.querySelectorAll('#f-int button').forEach(b => b.classList.toggle('on', b.dataset.v===form.intensity));
+  const opts = name => {
+    const list = db.meds.includes(name) || !name ? db.meds : [name, ...db.meds];
+    return list.map(m => `<option ${m===name?'selected':''}>${esc(m)}</option>`).join('');
+  };
+  $('#f-meds').innerHTML = form.meds.map((m,i) => `
+    <div class="med">
+      <select data-i="${i}" data-k="name">${opts(m.name)}</select>
+      <input type="time" data-i="${i}" data-k="time" value="${esc(m.time)}">
+      <button class="icon-btn" data-rm="${i}" aria-label="Rimuovi">×</button>
+    </div>`).join('');
+  $('#f-medchips').innerHTML = db.meds.map(m => `<button class="chip" data-med="${esc(m)}">+ ${esc(m)}</button>`).join('');
+  $('#f-tags').innerHTML = db.tags.map(t => `<button class="chip ${form.tags.includes(t)?'on':''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
+  $('#f-note').value = form.note;
+  $('#edit-banner').hidden = !editing;
+  $('#f-del').hidden = !editing;
+  $('#f-cancel').hidden = !editing;
+  $('#f-save').textContent = editing ? 'Salva modifiche' : 'Salva episodio';
+  if ($('#v-add').classList.contains('active')) $('#title').textContent = editing ? 'Modifica episodio' : 'Nuovo episodio';
+  $('#subtitle').textContent = fmtDate(form.date);
+}
+$('#f-date').onchange = e => {
+  const v = e.target.value; if (!v) return;
+  if (db.episodes[v]) { loadForm(db.episodes[v]); toast('Episodio già presente: lo stai modificando'); }
+  else { const wasEditing = editing; form.date = v; editing = null; if (wasEditing){ form.meds=[]; form.tags=[]; form.note=''; form.intensity='Medio'; } renderForm(); }
+};
+document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
+  const d = new Date(); d.setDate(d.getDate() + Number(b.dataset.quick));
+  $('#f-date').value = iso(d); $('#f-date').onchange({target:$('#f-date')});
+});
+$('#f-int').onclick = e => { const b = e.target.closest('button'); if (!b) return; form.intensity = b.dataset.v; renderForm(); };
+$('#f-medchips').onclick = e => {
+  const b = e.target.closest('[data-med]'); if (!b) return;
+  form.meds.push({name:b.dataset.med, time: form.date===todayIso() ? nowTime() : ''});
+  renderForm();
+};
+$('#f-meds').onclick = e => { const b = e.target.closest('[data-rm]'); if (!b) return; form.meds.splice(+b.dataset.rm,1); renderForm(); };
+$('#f-meds').onchange = e => { const el = e.target; if (el.dataset.i==null) return; form.meds[+el.dataset.i][el.dataset.k] = el.value; };
+$('#f-tags').onclick = e => {
+  const b = e.target.closest('[data-tag]'); if (!b) return;
+  const t = b.dataset.tag; form.tags = form.tags.includes(t) ? form.tags.filter(x=>x!==t) : [...form.tags, t];
+  renderForm();
+};
+$('#f-note').oninput = e => form.note = e.target.value;
+$('#f-save').onclick = () => {
+  if (!form.date) return toast('Scegli un giorno');
+  const note = [...form.tags, form.note.trim()].filter(Boolean).join(', ');
+  const ep = {date:form.date, intensity:form.intensity,
+    meds: form.meds.filter(m=>m.name).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')), note};
+  if (editing && editing !== form.date) delete db.episodes[editing];
+  db.episodes[form.date] = ep;
+  save();
+  toast(editing ? 'Modifiche salvate ✓' : 'Episodio salvato ✓');
+  calMonth = parseIso(form.date); calMonth.setDate(1);
+  resetForm(); show('v-cal');
+};
+$('#f-del').onclick = () => {
+  if (!editing || !confirm('Eliminare l\'episodio del ' + fmtDate(editing) + '?')) return;
+  delete db.episodes[editing]; save(); toast('Episodio eliminato');
+  resetForm(); show('v-cal');
+};
+$('#f-cancel').onclick = () => { resetForm(); show('v-cal'); };
+
+// ---------- calendar ----------
+let calMonth = new Date(); calMonth.setDate(1);
+function epLine(e){
+  const meds = e.meds.length ? e.meds.map(m => esc(m.name) + (m.time ? ` <span style="font-weight:400;color:var(--muted)">${esc(m.time)}</span>` : '')).join(' · ') : '<span style="font-weight:400;color:var(--muted)">Nessun farmaco</span>';
+  const d = parseIso(e.date);
+  return `<div class="ep" data-date="${e.date}">
+    <div class="day ${e.intensity}">${d.getDate()}<small>${d.toLocaleDateString('it-IT',{weekday:'short'})}</small></div>
+    <div class="info"><div class="meds">${meds}</div><div class="note">${esc(e.intensity)}${e.note ? ' — ' + esc(e.note) : ''}</div></div>
+  </div>`;
+}
+function monthStats(eps){
+  return [
+    [eps.length, 'giorni con mal di testa'],
+    [eps.filter(e=>e.intensity==='Forte').length, 'giorni forti'],
+    [eps.reduce((a,e)=>a+e.meds.length,0), 'farmaci assunti'],
+  ].map(([n,l]) => `<div class="stat"><b>${n}</b><small>${l}</small></div>`).join('');
+}
+function renderCal(){
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  $('#c-title').textContent = MESI[m] + ' ' + y;
+  const first = (new Date(y,m,1).getDay() + 6) % 7;
+  const days = new Date(y,m+1,0).getDate();
+  const today = todayIso();
+  let h = DOW.map(d => `<div class="dow">${d}</div>`).join('');
+  for (let i=0;i<first;i++) h += '<div class="d empty"></div>';
+  for (let d=1; d<=days; d++){
+    const k = y+'-'+pad(m+1)+'-'+pad(d), e = db.episodes[k];
+    const cls = ['d', e ? e.intensity : '', k===today ? 'today' : '', k>today ? 'future' : ''].join(' ');
+    h += `<button class="${cls}" data-date="${k}">${d}${e && e.meds.length ? `<span class="pills">${'•'.repeat(Math.min(e.meds.length,4))}</span>` : ''}</button>`;
+  }
+  $('#c-grid').innerHTML = h;
+  const eps = episodesIn(y+'-'+pad(m+1));
+  $('#c-stats').innerHTML = monthStats(eps);
+  $('#c-list').innerHTML = eps.length ? eps.map(epLine).join('') : '<div class="empty-msg">Nessun episodio questo mese 🎉</div>';
+}
+function openDate(k){
+  if (k > todayIso()) return;
+  if (db.episodes[k]) loadForm(db.episodes[k]); else resetForm(k);
+  show('v-add');
+}
+$('#c-grid').onclick = e => { const b = e.target.closest('[data-date]'); if (b) openDate(b.dataset.date); };
+$('#c-list').onclick = e => { const b = e.target.closest('[data-date]'); if (b) openDate(b.dataset.date); };
+$('#c-prev').onclick = () => { calMonth.setMonth(calMonth.getMonth()-1); renderCal(); };
+$('#c-next').onclick = () => { calMonth.setMonth(calMonth.getMonth()+1); renderCal(); };
+
+// ---------- stats ----------
+let statYear = new Date().getFullYear();
+function renderStats(){
+  const y = statYear;
+  $('#s-title').textContent = y;
+  const all = episodesIn(String(y));
+  $('#s-top').innerHTML = monthStats(all);
+  const rows = MESI.map((name,i) => {
+    const eps = all.filter(e => e.date.slice(5,7) === pad(i+1));
+    return {name, days:eps.length, forti:eps.filter(e=>e.intensity==='Forte').length,
+      meds:eps.reduce((a,e)=>a+e.meds.length,0), medDays:eps.filter(e=>e.meds.length).length};
+  });
+  const max = Math.max(1, ...rows.map(r=>r.days));
+  $('#s-bars').innerHTML = rows.map(r => `
+    <div class="b"><span class="v">${r.days||''}</span>
+      <div class="col" style="height:${r.days/max*100}%;${r.days?'':'background:var(--line)'}"><div class="f" style="height:${r.days ? r.forti/r.days*100 : 0}%"></div></div>
+      <span class="m">${r.name.slice(0,3)}</span></div>`).join('');
+  const tot = rows.reduce((a,r)=>({days:a.days+r.days, forti:a.forti+r.forti, meds:a.meds+r.meds, medDays:a.medDays+r.medDays}), {days:0,forti:0,meds:0,medDays:0});
+  $('#s-table').innerHTML = `<tr><th>Mese</th><th>Giorni</th><th>Forti</th><th>Gg con farmaci</th><th>Farmaci</th></tr>` +
+    rows.map(r => `<tr><td>${r.name}</td><td>${r.days}</td><td>${r.forti}</td><td>${r.medDays}</td><td>${r.meds}</td></tr>`).join('') +
+    `<tr class="tot"><td>Totale</td><td>${tot.days}</td><td>${tot.forti}</td><td>${tot.medDays}</td><td>${tot.meds}</td></tr>`;
+  const cnt = {};
+  all.forEach(e => e.meds.forEach(m => cnt[m.name] = (cnt[m.name]||0) + 1));
+  const sorted = Object.entries(cnt).sort((a,b)=>b[1]-a[1]);
+  const mmax = sorted.length ? sorted[0][1] : 1;
+  $('#s-meds').innerHTML = sorted.length ? sorted.map(([n,c]) => `
+    <div class="hbar"><span>${esc(n)}</span><div class="t" style="width:${c/mmax*100}%"></div><span class="n">${c}</span></div>`).join('')
+    : '<div class="empty-msg">Nessun farmaco registrato</div>';
+  const from = new Date(); from.setDate(from.getDate()-29);
+  const last = Object.values(db.episodes).filter(e => e.date >= iso(from) && e.date <= todayIso());
+  $('#s-30').innerHTML = [
+    [last.length,'giorni con mal di testa'],
+    [last.filter(e=>e.meds.length).length,'giorni con farmaci'],
+    [last.reduce((a,e)=>a+e.meds.length,0),'farmaci assunti'],
+  ].map(([n,l]) => `<div class="stat"><b>${n}</b><small>${l}</small></div>`).join('');
+}
+$('#s-prev').onclick = () => { statYear--; renderStats(); };
+$('#s-next').onclick = () => { statYear++; renderStats(); };
+
+// ---------- settings ----------
+function renderList(sel, arr, kind){
+  $(sel).innerHTML = arr.map((v,i) => `<div class="list-item"><span>${esc(v)}</span><span>
+    ${i>0 ? `<button class="mv" data-up="${i}" aria-label="Sposta su">↑</button>` : ''}
+    <button class="x" data-del="${i}">Rimuovi</button></span></div>`).join('') || '<div class="empty-msg">Lista vuota</div>';
+  $(sel).onclick = e => {
+    const up = e.target.closest('[data-up]'), del = e.target.closest('[data-del]');
+    if (up){ const i=+up.dataset.up; [arr[i-1],arr[i]]=[arr[i],arr[i-1]]; }
+    else if (del){ if (!confirm('Rimuovere "' + arr[+del.dataset.del] + '" dalla lista?\nGli episodi già salvati non vengono modificati.')) return; arr.splice(+del.dataset.del,1); }
+    else return;
+    save(); renderSettings(); renderForm();
+  };
+}
+function renderSettings(){
+  renderList('#set-meds', db.meds, 'med');
+  renderList('#set-tags', db.tags, 'tag');
+  const n = Object.keys(db.episodes).length;
+  $('#backup-info').textContent = n + ' episodi salvati. ' + (db.lastBackup ? 'Ultimo backup: ' + new Date(db.lastBackup).toLocaleDateString('it-IT') + '.' : 'Nessun backup ancora eseguito.');
+}
+function addTo(arr, input, upper){
+  let v = $(input).value.trim(); if (upper) v = v.toUpperCase();
+  if (!v) return; if (arr.includes(v)) return toast('Già presente');
+  arr.push(v); $(input).value = ''; save(); renderSettings(); renderForm(); toast('Aggiunto ✓');
+}
+$('#set-med-add').onclick = () => addTo(db.meds, '#set-med-new', true);
+$('#set-tag-add').onclick = () => addTo(db.tags, '#set-tag-new', false);
+$('#set-med-new').onkeydown = e => { if (e.key==='Enter') $('#set-med-add').onclick(); };
+$('#set-tag-new').onkeydown = e => { if (e.key==='Enter') $('#set-tag-add').onclick(); };
+
+async function shareOrDownload(filename, content, type){
+  const blob = new Blob([content], {type});
+  const file = new File([blob], filename, {type});
+  if (navigator.canShare && navigator.canShare({files:[file]})) {
+    try { await navigator.share({files:[file], title:filename}); return true; }
+    catch(e){ if (e.name === 'AbortError') return false; }
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 5000);
+  return true;
+}
+$('#exp-json').onclick = async () => {
+  const data = {app:'diario-mal-di-testa', version:1, exportedAt:new Date().toISOString(),
+    episodes:Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date)), meds:db.meds, tags:db.tags};
+  if (await shareOrDownload('backup-mal-di-testa-' + todayIso() + '.json', JSON.stringify(data, null, 1), 'application/json')) {
+    db.lastBackup = new Date().toISOString(); save(); renderSettings();
+  }
+};
+$('#exp-csv').onclick = () => {
+  const eps = Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date));
+  const n = Math.max(3, ...eps.map(e=>e.meds.length));
+  const q = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
+  const head = ['Data','Mese','Intensità']; for (let i=1;i<=n;i++) head.push('Farmaco '+i, 'Orario '+i); head.push('Note');
+  const lines = [head.map(q).join(';')];
+  eps.forEach(e => {
+    const d = parseIso(e.date);
+    const r = [pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(), MESI[d.getMonth()], e.intensity];
+    for (let i=0;i<n;i++) r.push(e.meds[i]?.name || '', e.meds[i]?.time || '');
+    r.push(e.note); lines.push(r.map(q).join(';'));
+  });
+  shareOrDownload('mal-di-testa-' + todayIso() + '.csv', '﻿' + lines.join('\r\n'), 'text/csv');
+};
+$('#imp-json').onclick = () => $('#imp-file').click();
+$('#imp-file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!Array.isArray(data.episodes)) throw new Error('File non valido');
+    const valid = data.episodes.filter(ep => /^\d{4}-\d{2}-\d{2}$/.test(ep.date) && ['Medio','Forte'].includes(ep.intensity));
+    const clash = valid.filter(ep => db.episodes[ep.date]).length;
+    if (!confirm(`Importare ${valid.length} episodi?` + (clash ? `\n${clash} giorni sono già presenti e verranno sostituiti.` : ''))) return;
+    valid.forEach(ep => db.episodes[ep.date] = {date:ep.date, intensity:ep.intensity,
+      meds:(ep.meds||[]).map(m=>({name:String(m.name||''), time:String(m.time||'')})).filter(m=>m.name), note:String(ep.note||'')});
+    (data.meds || valid.flatMap(ep => (ep.meds||[]).map(m=>m.name))).forEach(m => { if (m && !db.meds.includes(m)) db.meds.push(m); });
+    (data.tags || []).forEach(t => { if (t && !db.tags.includes(t)) db.tags.push(t); });
+    save(); renderSettings(); renderForm(); toast(valid.length + ' episodi importati ✓');
+  } catch(err) { alert('Impossibile leggere il file: ' + err.message); }
+};
+$('#wipe').onclick = () => {
+  if (!confirm('Cancellare TUTTI gli episodi? L\'operazione non si può annullare.')) return;
+  if (!confirm('Sei sicuro? Ti consiglio di fare prima un backup.')) return;
+  db.episodes = {}; save(); renderSettings(); resetForm(); toast('Dati cancellati');
+};
+
+// ---------- init ----------
+resetForm();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
