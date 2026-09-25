@@ -7,6 +7,7 @@ Web app personale (PWA) per registrare gli episodi di mal di testa da iPhone.
 - Funziona offline grazie a `sw.js`
 - Backup/ripristino in JSON ed esportazione CSV per Excel dalla schermata Impostazioni
 - Report PDF per un periodo a scelta (dal/al) con riepilogo, grafico, tabella mensile, calendario, farmaci, note ed elenco episodi, generato sul telefono senza librerie esterne
+- Tossina botulinica: si segna nel giorno del trattamento (anche senza mal di testa), in calendario compare 💉 e nel PDF una riga verde
 - Profilo (nome, cognome, data di nascita, telefono, email): alla creazione del PDF l'app chiede se aggiungerlo in prima pagina
 
 ## Installazione su iPhone

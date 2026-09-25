@@ -17,14 +17,14 @@
 :root{
   --bg:#f4f2fb; --card:#ffffff; --text:#1d1b26; --muted:#6e6a80; --line:#e4e1ee;
   --accent:#5b4bdb; --accent-soft:#e9e6fb; --medio:#f5a524; --medio-soft:#fdf0d9;
-  --forte:#e5484d; --forte-soft:#fbe1e2; --ok:#2f9e6b;
+  --forte:#e5484d; --forte-soft:#fbe1e2; --ok:#2f9e6b; --botox:#2f9e6b; --botox-soft:#d9f2e1;
   --radius:14px;
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#16141f; --card:#211f2d; --text:#f0eef7; --muted:#9c98ad; --line:#34313f;
     --accent:#8d80f5; --accent-soft:#2e2a4a; --medio:#f5b04a; --medio-soft:#3f3220;
-    --forte:#ff6b70; --forte-soft:#46252a;
+    --forte:#ff6b70; --forte-soft:#46252a; --botox:#4cc38a; --botox-soft:#1f3b2c;
   }
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -114,7 +114,11 @@ nav.tabs button.on{color:var(--accent)}
 .ep:first-child{border-top:0}
 .ep .day{min-width:44px;text-align:center;border-radius:10px;padding:6px 0;font-weight:700;color:#fff}
 .ep .day small{display:block;font-size:11px;font-weight:500;opacity:.9;text-transform:capitalize}
-.ep .day.Medio{background:var(--medio)}.ep .day.Forte{background:var(--forte)}
+.ep .day.Medio{background:var(--medio)}.ep .day.Forte{background:var(--forte)}.ep .day.Botox{background:var(--botox)}
+.cal .d .bx{position:absolute;top:2px;right:3px;font-size:13px;line-height:1}
+.cal .d.botox-only{background:var(--botox-soft)}
+.botox-txt{color:var(--botox);font-weight:600}
+.chip.botox.on{background:var(--botox);border-color:var(--botox)}
 .ep .info{flex:1;min-width:0;font-size:14px}
 .ep .info .meds{font-weight:600}
 .ep .info .note{color:var(--muted);font-size:13px}
@@ -180,7 +184,7 @@ tr.tot td{font-weight:700;border-bottom:0}
       <p class="label">Farmaci assunti</p>
       <div id="f-meds"></div>
       <div class="chips" id="f-medchips"></div>
-      <p class="hint">Tocca un farmaco per aggiungerlo con l'ora attuale e scegli un'altra ora dal menu se serve. Se non hai preso niente, tocca "Nessun farmaco".</p>
+      <p class="hint">Tocca un farmaco per aggiungerlo con l'ora attuale e scegli un'altra ora dal menu se serve. Se non hai preso niente, tocca "Nessun farmaco". Per il giorno del trattamento tocca "Tossina botulinica": se quel giorno non hai avuto mal di testa, salva solo quella.</p>
     </div>
 
     <div class="card">
@@ -208,6 +212,7 @@ tr.tot td{font-weight:700;border-bottom:0}
         <span style="--c:var(--medio)">Medio</span>
         <span style="--c:var(--forte)">Forte</span>
         <span style="color:var(--muted)">• = n. farmaci</span>
+        <span style="color:var(--muted)">💉 = tossina</span>
       </div>
     </div>
     <div class="card">
@@ -409,6 +414,7 @@ function load(){
 let db = load();
 db.pending = db.pending || {};   // modifiche non ancora inviate al cloud: 'ep:AAAA-MM-GG' oppure 'settings'
 db.syncUid = db.syncUid || null; // account cloud a cui è collegato questo dispositivo
+db.botox = Array.isArray(db.botox) ? db.botox : []; // giorni (AAAA-MM-GG) con trattamento di tossina botulinica
 function save(){
   try{ localStorage.setItem(KEY, JSON.stringify(db)); }
   catch(e){ alert('Errore nel salvataggio dei dati: ' + e.message); }
@@ -439,6 +445,9 @@ function cleanEpisode(ep, updatedAt){
     time:String(ep.time||''), // orario dell'episodio quando non ci sono farmaci
     note:String(ep.note||''), updatedAt: updatedAt || Number(ep.updatedAt) || 0};
 }
+const hasBotox = d => db.botox.includes(d);
+const hasDay = d => !!db.episodes[d] || hasBotox(d);
+const BOTOX_LABEL = 'Trattamento tossina botulinica';
 const noMedLabel = e => 'Nessun farmaco' + (e.time ? ' (' + e.time + ')' : '');
 const episodesIn = (prefix) => Object.values(db.episodes).filter(e => e.date.startsWith(prefix)).sort((a,b)=>a.date.localeCompare(b.date));
 
@@ -464,16 +473,18 @@ document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => {
 let form, editing = null;
 function resetForm(date){
   editing = null;
-  form = {date: date || todayIso(), intensity:'Medio', meds:[], noMeds:false, noMedTime:'', tags:[], note:''};
-  const existing = db.episodes[form.date];
-  if (existing) return loadForm(existing);
+  form = {date: date || todayIso(), intensity:'Medio', meds:[], noMeds:false, noMedTime:'', botox:false, tags:[], note:''};
+  if (hasDay(form.date)) return loadForm(form.date);
   renderForm();
 }
-function loadForm(ep){
-  editing = ep.date;
+// apre un giorno già registrato: episodio di mal di testa e/o trattamento di tossina botulinica
+function loadForm(date){
+  const ep = db.episodes[date];
+  editing = date;
   const tags = [], rest = [];
-  (ep.note||'').split(/\s*[,;]\s*/).filter(Boolean).forEach(p => (db.tags.includes(p) ? tags : rest).push(p));
-  form = {date:ep.date, intensity:ep.intensity, meds:ep.meds.map(m=>({...m})), noMeds:!ep.meds.length, noMedTime:ep.time||'', tags, note:rest.join(', ')};
+  ((ep && ep.note)||'').split(/\s*[,;]\s*/).filter(Boolean).forEach(p => (db.tags.includes(p) ? tags : rest).push(p));
+  form = {date, intensity: ep ? ep.intensity : 'Medio', meds: ep ? ep.meds.map(m=>({...m})) : [], noMeds: !!ep && !ep.meds.length,
+    noMedTime: (ep && ep.time) || '', botox: hasBotox(date), tags, note:rest.join(', ')};
   renderForm();
 }
 function renderForm(){
@@ -497,9 +508,15 @@ function renderForm(){
       <div class="nomed">🚫 Nessun farmaco</div>
       <select id="f-nomed-time" aria-label="Orario">${hourOpts(form.noMedTime)}</select>
       <button class="icon-btn" data-nomeds aria-label="Rimuovi">×</button>
+    </div>` : '') + (form.botox ? `
+    <div class="med">
+      <div class="nomed botox-txt">💉 Tossina botulinica</div>
+      <div class="hint" style="margin:0">senza orario</div>
+      <button class="icon-btn" data-botox aria-label="Rimuovi">×</button>
     </div>` : '');
   // "Nessun farmaco": mal di testa senza medicine, esclude i farmaci (e viceversa)
   $('#f-medchips').innerHTML = `<button class="chip none ${form.noMeds ? 'on' : ''}" data-nomeds>🚫 Nessun farmaco</button>` +
+    `<button class="chip botox ${form.botox ? 'on' : ''}" data-botox>💉 Tossina botulinica</button>` +
     db.meds.map(m => `<button class="chip" data-med="${esc(m)}">+ ${esc(m)}</button>`).join('');
   $('#f-tags').innerHTML = db.tags.map(t => `<button class="chip ${form.tags.includes(t)?'on':''}" data-tag="${esc(t)}">${esc(t)}</button>`).join('');
   $('#f-note').value = form.note;
@@ -512,8 +529,8 @@ function renderForm(){
 }
 $('#f-date').onchange = e => {
   const v = e.target.value; if (!v) return;
-  if (db.episodes[v]) { loadForm(db.episodes[v]); toast('Episodio già presente: lo stai modificando'); }
-  else { const wasEditing = editing; form.date = v; editing = null; if (wasEditing){ form.meds=[]; form.noMeds=false; form.noMedTime=''; form.tags=[]; form.note=''; form.intensity='Medio'; } renderForm(); }
+  if (hasDay(v)) { loadForm(v); toast('Giorno già registrato: lo stai modificando'); }
+  else { const wasEditing = editing; form.date = v; editing = null; if (wasEditing){ form.meds=[]; form.noMeds=false; form.noMedTime=''; form.botox=false; form.tags=[]; form.note=''; form.intensity='Medio'; } renderForm(); }
 };
 document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
   const d = new Date(); d.setDate(d.getDate() + Number(b.dataset.quick));
@@ -521,6 +538,7 @@ document.querySelectorAll('[data-quick]').forEach(b => b.onclick = () => {
 });
 $('#f-int').onclick = e => { const b = e.target.closest('button'); if (!b) return; form.intensity = b.dataset.v; renderForm(); };
 $('#f-medchips').onclick = e => {
+  if (e.target.closest('[data-botox]')) { form.botox = !form.botox; return renderForm(); }
   if (e.target.closest('[data-nomeds]')) {
     form.noMeds = !form.noMeds;
     if (form.noMeds) { form.meds = []; form.noMedTime = form.date === todayIso() ? nowHour() : ''; }
@@ -533,6 +551,7 @@ $('#f-medchips').onclick = e => {
 };
 $('#f-meds').onclick = e => {
   if (e.target.closest('[data-nomeds]')) { form.noMeds = false; return renderForm(); }
+  if (e.target.closest('[data-botox]')) { form.botox = false; return renderForm(); }
   const b = e.target.closest('[data-rm]'); if (!b) return; form.meds.splice(+b.dataset.rm,1); renderForm();
 };
 $('#f-meds').onchange = e => {
@@ -548,22 +567,32 @@ $('#f-tags').onclick = e => {
 $('#f-note').oninput = e => form.note = e.target.value;
 $('#f-save').onclick = () => {
   if (!form.date) return toast('Scegli un giorno');
-  if (!form.meds.some(m => m.name) && !form.noMeds) return toast('Aggiungi un farmaco oppure tocca "Nessun farmaco"');
+  // un giorno può avere il mal di testa (farmaci o "Nessun farmaco"), la tossina botulinica, o tutti e due
+  const headache = form.meds.some(m => m.name) || form.noMeds;
+  if (!headache && !form.botox) return toast('Aggiungi un farmaco oppure tocca "Nessun farmaco"');
   const note = [...form.tags, form.note.trim()].filter(Boolean).join(', ');
   const ep = {date:form.date, intensity:form.intensity,
     meds: form.meds.filter(m=>m.name).sort((a,b)=>(a.time||'99').localeCompare(b.time||'99')),
     time: form.noMeds ? form.noMedTime : '', note, updatedAt:Date.now()};
-  const keys = ['ep:' + form.date];
-  if (editing && editing !== form.date) { delete db.episodes[editing]; keys.push('ep:' + editing); }
-  db.episodes[form.date] = ep;
+  const keys = new Set(), botoxBefore = db.botox.join();
+  for (const d of new Set([editing, form.date].filter(Boolean))) {
+    if (db.episodes[d]) { delete db.episodes[d]; keys.add('ep:' + d); }
+    db.botox = db.botox.filter(x => x !== d);
+  }
+  if (headache) { db.episodes[form.date] = ep; keys.add('ep:' + form.date); }
+  if (form.botox) db.botox = [...db.botox, form.date].sort();
+  if (db.botox.join() !== botoxBefore) keys.add('settings');
   commit(...keys);
-  toast(editing ? 'Modifiche salvate ✓' : 'Episodio salvato ✓');
+  toast(editing ? 'Modifiche salvate ✓' : headache ? 'Episodio salvato ✓' : 'Trattamento salvato ✓');
   calMonth = parseIso(form.date); calMonth.setDate(1);
   resetForm(); show('v-cal');
 };
 $('#f-del').onclick = () => {
-  if (!editing || !confirm('Eliminare l\'episodio del ' + fmtDate(editing) + '?')) return;
-  delete db.episodes[editing]; commit('ep:' + editing); toast('Episodio eliminato');
+  if (!editing || !confirm('Eliminare ' + (db.episodes[editing] ? 'l\'episodio' : 'il trattamento') + ' del ' + fmtDate(editing) + '?')) return;
+  const keys = [];
+  if (db.episodes[editing]) { delete db.episodes[editing]; keys.push('ep:' + editing); }
+  if (hasBotox(editing)) { db.botox = db.botox.filter(x => x !== editing); keys.push('settings'); }
+  commit(...keys); toast('Eliminato');
   resetForm(); show('v-cal');
 };
 $('#f-cancel').onclick = () => { resetForm(); show('v-cal'); };
@@ -575,7 +604,14 @@ function epLine(e){
   const d = parseIso(e.date);
   return `<div class="ep" data-date="${e.date}">
     <div class="day ${e.intensity}">${d.getDate()}<small>${d.toLocaleDateString('it-IT',{weekday:'short'})}</small></div>
-    <div class="info"><div class="meds">${meds}</div><div class="note">${esc(e.intensity)}${e.note ? ' — ' + esc(e.note) : ''}</div></div>
+    <div class="info"><div class="meds">${meds}</div><div class="note">${esc(e.intensity)}${e.note ? ' — ' + esc(e.note) : ''}</div>${hasBotox(e.date) ? `<div class="note botox-txt">💉 ${BOTOX_LABEL}</div>` : ''}</div>
+  </div>`;
+}
+function botoxLine(date){
+  const d = parseIso(date);
+  return `<div class="ep" data-date="${date}">
+    <div class="day Botox">${d.getDate()}<small>${d.toLocaleDateString('it-IT',{weekday:'short'})}</small></div>
+    <div class="info"><div class="meds botox-txt">💉 ${BOTOX_LABEL}</div><div class="note">Nessun mal di testa segnato</div></div>
   </div>`;
 }
 function monthStats(eps){
@@ -594,18 +630,20 @@ function renderCal(){
   let h = DOW.map(d => `<div class="dow">${d}</div>`).join('');
   for (let i=0;i<first;i++) h += '<div class="d empty"></div>';
   for (let d=1; d<=days; d++){
-    const k = y+'-'+pad(m+1)+'-'+pad(d), e = db.episodes[k];
-    const cls = ['d', e ? e.intensity : '', k===today ? 'today' : '', k>today ? 'future' : ''].join(' ');
-    h += `<button class="${cls}" data-date="${k}">${d}${e && e.meds.length ? `<span class="pills">${'•'.repeat(Math.min(e.meds.length,4))}</span>` : ''}</button>`;
+    const k = y+'-'+pad(m+1)+'-'+pad(d), e = db.episodes[k], bx = hasBotox(k);
+    const cls = ['d', e ? e.intensity : bx ? 'botox-only' : '', k===today ? 'today' : '', k>today ? 'future' : ''].join(' ');
+    h += `<button class="${cls}" data-date="${k}">${d}${e && e.meds.length ? `<span class="pills">${'•'.repeat(Math.min(e.meds.length,4))}</span>` : ''}${bx ? '<span class="bx" aria-label="Tossina botulinica">💉</span>' : ''}</button>`;
   }
   $('#c-grid').innerHTML = h;
-  const eps = episodesIn(y+'-'+pad(m+1));
+  const key = y+'-'+pad(m+1), eps = episodesIn(key);
   $('#c-stats').innerHTML = monthStats(eps);
-  $('#c-list').innerHTML = eps.length ? eps.map(epLine).join('') : '<div class="empty-msg">Nessun episodio questo mese 🎉</div>';
+  const lines = [...eps.map(e => [e.date, epLine(e)]), ...db.botox.filter(d => d.startsWith(key) && !db.episodes[d]).map(d => [d, botoxLine(d)])]
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  $('#c-list').innerHTML = lines.length ? lines.map(l => l[1]).join('') : '<div class="empty-msg">Nessun episodio questo mese 🎉</div>';
 }
 function openDate(k){
   if (k > todayIso()) return;
-  if (db.episodes[k]) loadForm(db.episodes[k]); else resetForm(k);
+  if (hasDay(k)) loadForm(k); else resetForm(k);
   show('v-add');
 }
 $('#c-grid').onclick = e => { const b = e.target.closest('[data-date]'); if (b) openDate(b.dataset.date); };
@@ -722,20 +760,22 @@ async function shareOrDownload(filename, content, type){
 }
 $('#exp-json').onclick = async () => {
   const data = {app:'diario-mal-di-testa', version:1, exportedAt:new Date().toISOString(),
-    episodes:Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date)), meds:db.meds, tags:db.tags, profile:db.profile||{}};
+    episodes:Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date)), meds:db.meds, tags:db.tags, profile:db.profile||{}, botox:db.botox};
   if (await shareOrDownload('backup-mal-di-testa-' + todayIso() + '.json', JSON.stringify(data, null, 1), 'application/json')) {
     db.lastBackup = new Date().toISOString(); save(); renderSettings();
   }
 };
 $('#exp-csv').onclick = () => {
-  const eps = Object.values(db.episodes).sort((a,b)=>a.date.localeCompare(b.date));
+  // episodi più i giorni con la sola tossina botulinica
+  const eps = [...Object.values(db.episodes), ...db.botox.filter(d => !db.episodes[d]).map(d => ({date:d, intensity:'', meds:[], note:'', botoxOnly:true}))]
+    .sort((a,b)=>a.date.localeCompare(b.date));
   const n = Math.max(3, ...eps.map(e=>e.meds.length));
   const q = v => '"' + String(v ?? '').replace(/"/g,'""') + '"';
-  const head = ['Data','Mese','Intensità','Senza farmaci','Orario (senza farmaci)']; for (let i=1;i<=n;i++) head.push('Farmaco '+i, 'Orario '+i); head.push('Note');
+  const head = ['Data','Mese','Intensità','Senza farmaci','Orario (senza farmaci)','Tossina botulinica']; for (let i=1;i<=n;i++) head.push('Farmaco '+i, 'Orario '+i); head.push('Note');
   const lines = [head.map(q).join(';')];
   eps.forEach(e => {
     const d = parseIso(e.date);
-    const r = [pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(), MESI[d.getMonth()], e.intensity, e.meds.length ? '' : 'Sì', e.meds.length ? '' : e.time || ''];
+    const r = [pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear(), MESI[d.getMonth()], e.intensity, e.meds.length || e.botoxOnly ? '' : 'Sì', e.meds.length ? '' : e.time || '', hasBotox(e.date) ? 'Sì' : ''];
     for (let i=0;i<n;i++) r.push(e.meds[i]?.name || '', e.meds[i]?.time || '');
     r.push(e.note); lines.push(r.map(q).join(';'));
   });
@@ -751,8 +791,10 @@ $('#imp-file').onchange = async e => {
     const clash = valid.filter(ep => db.episodes[ep.date]).length;
     if (!confirm(`Importare ${valid.length} episodi?` + (clash ? `\n${clash} giorni sono già presenti e verranno sostituiti.` : ''))) return;
     valid.forEach(ep => db.episodes[ep.date] = cleanEpisode(ep));
+    setTimeout(botoxFromNotes);
     (data.meds || valid.flatMap(ep => (ep.meds||[]).map(m=>m.name))).forEach(m => { if (m && !db.meds.includes(m)) db.meds.push(m); });
     (data.tags || []).forEach(t => { if (t && !db.tags.includes(t)) db.tags.push(t); });
+    if (Array.isArray(data.botox)) db.botox = [...new Set([...db.botox, ...data.botox.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))])].sort();
     if (data.profile && typeof data.profile === 'object' && !hasProfile())
       db.profile = Object.fromEntries(PROFILE_FIELDS.map(k => [k, String(data.profile[k] || '')]));
     commit('settings', ...valid.map(ep => 'ep:' + ep.date)); renderSettings(); renderForm(); toast(valid.length + ' episodi importati ✓');
@@ -761,8 +803,8 @@ $('#imp-file').onchange = async e => {
 $('#wipe').onclick = () => {
   if (!confirm('Cancellare TUTTI gli episodi? L\'operazione non si può annullare.' + (db.syncUid ? '\nVerranno cancellati anche dal cloud e da tutti i dispositivi collegati.' : ''))) return;
   if (!confirm('Sei sicuro? Ti consiglio di fare prima un backup.')) return;
-  const keys = Object.keys(db.episodes).map(d => 'ep:' + d);
-  db.episodes = {}; commit(...keys); renderSettings(); resetForm(); toast('Dati cancellati');
+  const keys = [...Object.keys(db.episodes).map(d => 'ep:' + d), 'settings'];
+  db.episodes = {}; db.botox = []; commit(...keys); renderSettings(); resetForm(); toast('Dati cancellati');
 };
 
 // ---------- profilo ----------
@@ -843,7 +885,7 @@ function refreshViews(){
 
 const userDoc = () => fb.doc(fbStore, 'users', fbUser.uid);
 const epCol = () => fb.collection(fbStore, 'users', fbUser.uid, 'episodes');
-const settingsData = () => ({meds:db.meds, tags:db.tags, profile:db.profile || {}});
+const settingsData = () => ({meds:db.meds, tags:db.tags, profile:db.profile || {}, botox:db.botox});
 
 function pushPending(){
   if (!fb || !fbUser || db.syncUid !== fbUser.uid) return renderSync();
@@ -875,7 +917,7 @@ async function linkDevice(){
   if (setSnap.exists()) {
     const r = setSnap.data(), before = JSON.stringify(r);
     const union = (a, b) => [...(a || []), ...(b || []).filter(x => !(a || []).includes(x))];
-    db.meds = union(r.meds, db.meds); db.tags = union(r.tags, db.tags);
+    db.meds = union(r.meds, db.meds); db.tags = union(r.tags, db.tags); db.botox = union(r.botox, db.botox).sort();
     const rp = r.profile || {};
     if (!PROFILE_FIELDS.some(k => rp[k])) db.profile = db.profile || {}; else db.profile = rp;
     if (JSON.stringify(settingsData()) !== before) db.pending.settings = Date.now();
@@ -900,6 +942,7 @@ function startListeners(){
     const r = snap.data();
     if (Array.isArray(r.meds)) db.meds = r.meds.map(String);
     if (Array.isArray(r.tags)) db.tags = r.tags.map(String);
+    if (Array.isArray(r.botox)) db.botox = r.botox.map(String).sort();
     if (r.profile && typeof r.profile === 'object') db.profile = Object.fromEntries(PROFILE_FIELDS.map(k => [k, String(r.profile[k] || '')]));
     save(); refreshViews();
   }, e => { syncError = errText(e); renderSync(); }));
@@ -1127,6 +1170,8 @@ function buildReport(from, to, profile){
   const dayDiff = (a, b) => Math.round((parseIso(b) - parseIso(a)) / 864e5);
   const num = n => n.toLocaleString('it-IT', {maximumFractionDigits:1});
   const eps = Object.values(db.episodes).filter(e => e.date >= from && e.date <= to).sort((a,b) => a.date.localeCompare(b.date));
+  const botoxDays = db.botox.filter(d => d >= from && d <= to);
+  C.botox = '#2f9e6b'; C.botoxSoft = '#d9f2e1';
   const nDays = dayDiff(from, to) + 1;
   const pdf = new Pdf(), M = 40, CW = pdf.W - 2*M;
   let y;
@@ -1156,12 +1201,13 @@ function buildReport(from, to, profile){
         if (contTitle) { pdf.text(M, y + 12, contTitle + ' (continua)', {size:11, bold:true, color:C.muted}); y += 22; }
         head();
       }
+      if (r.fill) pdf.rect(M, y, CW, h, r.fill);
       let x = M;
       r.cells.forEach((v, i) => {
         const c = cols[i], cell = typeof v === 'object' ? v : {t:v};
         let tx = c.align === 'right' ? x + c.w - 4 : x + 4;
         if (cell.dot) { pdf.rect(tx, y + 5, 7, 7, cell.dot); tx += 11; }
-        lines[i].forEach((ln, j) => pdf.text(tx, y + 12 + j*11, ln, {size:9, bold:r.bold, align:c.align}));
+        lines[i].forEach((ln, j) => pdf.text(tx, y + 12 + j*11, ln, {size:9, bold:r.bold, color:r.color, align:c.align}));
         x += c.w;
       });
       y += h; pdf.line(M, y, M + CW, y, C.line, 0.5);
@@ -1216,8 +1262,13 @@ function buildReport(from, to, profile){
   pdf.text(M, y + 4, `In media ${num(eps.length / nDays * 30)} giorni di mal di testa e ${num(medDays / nDays * 30)} giorni con farmaci ogni 30 giorni.` +
     (eps.length ? ` Senza farmaci: ${eps.length - medDays} ${eps.length - medDays === 1 ? 'giorno' : 'giorni'}.` : ''), {size:9.5});
   y += 10;
+  if (botoxDays.length) {
+    y += 6; pdf.rect(M, y - 2, CW, 18, C.botoxSoft);
+    pdf.text(M + 8, y + 10, `Trattamenti con tossina botulinica nel periodo: ${botoxDays.map(dmy).join(', ')}`, {size:9.5, bold:true, color:C.botox});
+    y += 18;
+  }
 
-  if (!eps.length) {
+  if (!eps.length && !botoxDays.length) {
     y += 20; pdf.text(M, y, 'Nessun episodio registrato nel periodo scelto.', {size:11, color:C.muted});
   } else {
     // --- dati per mese
@@ -1229,6 +1280,7 @@ function buildReport(from, to, profile){
       const me = eps.filter(e => e.date.startsWith(key));
       months.push({key, y:d.getFullYear(), m:d.getMonth(), partial: start !== iso(d) || end !== last, inRange: dayDiff(start, end) + 1,
         start, end, days: me.length, forti: me.filter(e => e.intensity === 'Forte').length,
+        botox: botoxDays.filter(d => d.startsWith(key)),
         medDays: me.filter(e => e.meds.length).length, noMed: me.filter(e => !e.meds.length).length, meds: me.reduce((a, e) => a + e.meds.length, 0)});
     }
     const multiYear = months[0].y !== months[months.length - 1].y;
@@ -1282,17 +1334,18 @@ function buildReport(from, to, profile){
       pdf.text(M, y + 11, MESI[mo.m].slice(0,3) + ' ' + mo.y, {size:8.5, bold:true});
       const dim = new Date(mo.y, mo.m + 1, 0).getDate();
       for (let d = 1; d <= dim; d++) {
-        const k = mo.key + '-' + pad(d), e = db.episodes[k], x = M + lw + (d - 1) * cw;
+        const k = mo.key + '-' + pad(d), e = db.episodes[k], bx = hasBotox(k), x = M + lw + (d - 1) * cw;
         if (k < from || k > to) continue;
-        const fill = e ? (e.intensity === 'Forte' ? C.forte : C.medio) : C.soft;
+        const fill = e ? (e.intensity === 'Forte' ? C.forte : C.medio) : bx ? C.botoxSoft : C.soft;
         pdf.rect(x + 0.6, y, cw - 1.2, ch, fill);
-        pdf.text(x + cw / 2, y + 10, String(d), {size:6, color: e ? '#ffffff' : C.muted, align:'center', bold: !!e});
+        if (bx) pdf.rect(x + 0.6, y + ch - 3, cw - 1.2, 3, C.botox); // striscia verde: tossina botulinica
+        pdf.text(x + cw / 2, y + 10, String(d), {size:6, color: e ? '#ffffff' : bx ? C.botox : C.muted, align:'center', bold: !!e || bx});
       }
       pdf.text(M + CW, y + 11, String(mo.days), {size:8.5, bold:true, align:'right'});
       y += ch + 4;
     });
     y += 8;
-    [[C.medio, 'Medio'], [C.forte, 'Forte'], [C.soft, 'Senza mal di testa']].reduce((x, [c, l]) => {
+    [[C.medio, 'Medio'], [C.forte, 'Forte'], [C.soft, 'Senza mal di testa'], ...(botoxDays.length ? [[C.botox, 'Tossina botulinica']] : [])].reduce((x, [c, l]) => {
       pdf.rect(x, y - 7, 8, 8, c); pdf.text(x + 12, y, l, {size:8, color:C.muted});
       return x + 22 + pdf.width(l, 8);
     }, M);
@@ -1336,22 +1389,28 @@ function buildReport(from, to, profile){
 
     // --- elenco episodi
     // --- dettaglio degli episodi: ogni mese parte su una pagina nuova (i mesi senza episodi non hanno pagina)
-    months.filter(mo => mo.days).forEach(mo => {
+    months.filter(mo => mo.days || mo.botox.length).forEach(mo => {
       newPage();
       const title = MESI[mo.m] + ' ' + mo.y;
       pdf.text(M, y + 18, title, {size:18, bold:true});
       y += 34;
       const gg = n => n + (n === 1 ? ' giorno' : ' giorni');
       pdf.text(M, y, `${gg(mo.days)} di mal di testa (${mo.forti} ${mo.forti === 1 ? 'forte' : 'forti'}) · ${mo.medDays} con farmaci · ${mo.noMed} senza farmaci · ${mo.meds} ${mo.meds === 1 ? 'farmaco assunto' : 'farmaci assunti'}`, {size:9.5, color:C.muted});
+      if (mo.botox.length) { y += 13; pdf.text(M, y, `Trattamento con tossina botulinica: ${mo.botox.map(dmy).join(', ')}`, {size:9.5, bold:true, color:C.botox}); }
       if (mo.partial) { y += 13; pdf.text(M, y, `Mese compreso solo in parte: dal ${dmy(mo.start)} al ${dmy(mo.end)}`, {size:8.5, color:C.muted}); }
       y += 8; pdf.line(M, y, M + CW, y, C.accent, 1); y += 8;
-      table([{t:'Data', w:90}, {t:'Intensità', w:62}, {t:'Farmaci (orario)', w:200, wrap:true}, {t:'Note', w:CW - 352, wrap:true}],
-        eps.filter(e => e.date.startsWith(mo.key)).map(e => ({cells: [
-          parseIso(e.date).toLocaleDateString('it-IT', {weekday:'short'}) + ' ' + dmy(e.date),
+      const dayLabel = d => parseIso(d).toLocaleDateString('it-IT', {weekday:'short'}) + ' ' + dmy(d);
+      const rows = [
+        ...eps.filter(e => e.date.startsWith(mo.key)).map(e => ({date:e.date, cells: [
+          dayLabel(e.date),
           {t:e.intensity, dot: e.intensity === 'Forte' ? C.forte : C.medio},
           e.meds.length ? e.meds.map(m => m.name + (m.time ? ' (' + m.time + ')' : '')).join(', ') : noMedLabel(e),
           e.note || '',
-        ]})), title);
+        ]})),
+        // il trattamento è una riga a sé, evidenziata in verde chiaro (dopo l'eventuale episodio dello stesso giorno)
+        ...mo.botox.map(d => ({date:d + '~', fill:C.botoxSoft, bold:true, color:C.botox, cells:[dayLabel(d), '', BOTOX_LABEL, '']})),
+      ].sort((a, b) => a.date.localeCompare(b.date));
+      table([{t:'Data', w:90}, {t:'Intensità', w:62}, {t:'Farmaci (orario)', w:200, wrap:true}, {t:'Note', w:CW - 352, wrap:true}], rows, title);
     });
   }
 
@@ -1397,6 +1456,16 @@ $('#pdf-sheet').onclick = e => {
   $('#pdf-sheet').hidden = true;
   if (b && b.dataset.anag) exportPdf(b.dataset.anag === '1');
 };
+
+// ---------- tossina botulinica dalle note ----------
+// I giorni con una nota tipo "Tossina botox" (come nell'Excel) diventano trattamenti di tossina botulinica.
+// All'avvio lo fa una sola volta; dopo un'importazione di backup lo rifà sui dati importati.
+function botoxFromNotes(){
+  const found = Object.values(db.episodes).filter(e => /botox|botulin/i.test(e.note) && !hasBotox(e.date)).map(e => e.date);
+  if (found.length) { db.botox = [...db.botox, ...found].sort(); commit('settings'); }
+  return found.length;
+}
+if (!db.botoxMigrated) { db.botoxMigrated = true; if (!botoxFromNotes()) save(); }
 
 // ---------- init ----------
 resetForm();
