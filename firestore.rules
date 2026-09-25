@@ -1,10 +1,11 @@
 rules_version = '2';
-// Ogni utente può leggere e scrivere solo i propri dati: users/{uid} e users/{uid}/episodes/{giorno}.
+// Ogni utente può leggere e scrivere solo i propri dati: users/{uid} e tutto quello che c'è sotto
+// (episodes/{giorno} per gli episodi, devices/{id} per i promemoria).
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{uid} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
-      match /episodes/{day} {
+      match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == uid;
       }
     }

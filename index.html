@@ -312,6 +312,18 @@ tr.tot td{font-weight:700;border-bottom:0}
       <p class="hint">Contiene riepilogo, grafico e tabella mensile, calendario, farmaci, note ed elenco degli episodi. Puoi salvarlo in File, stamparlo o inviarlo al medico. Se hai compilato il Profilo, ti chiede se aggiungere i tuoi dati.</p>
     </div>
     <div class="card">
+      <p class="label">Notifiche</p>
+      <p class="hint" id="nt-info" style="margin:0 0 12px"></p>
+      <div id="nt-box">
+        <div class="date-range" style="grid-template-columns:1fr;margin-bottom:12px">
+          <label>Promemoria ogni giorno alle<select id="nt-time"></select></label>
+        </div>
+        <button class="btn" id="nt-toggle">Attiva promemoria</button>
+        <div style="height:8px"></div>
+        <button class="btn secondary" id="nt-test">Prova una notifica adesso</button>
+      </div>
+    </div>
+    <div class="card">
       <p class="label">I miei farmaci</p>
       <div id="set-meds"></div>
       <div class="row" style="margin-top:8px">
@@ -650,6 +662,7 @@ function renderList(sel, arr, kind){
 }
 function renderSettings(){
   if (!$('#pdf-from').value) setPdfRange(3);
+  renderNotify();
   renderList('#set-meds', db.meds, 'med');
   renderList('#set-tags', db.tags, 'tag');
   const n = Object.keys(db.episodes).length;
@@ -794,6 +807,7 @@ function refreshViews(){
   if (v === 'v-stats') renderStats();
   if (v === 'v-set') renderSettings();
   if (v === 'v-add' && !editing) renderForm();
+  renderNotify();
   if (v === 'v-profile' && !document.activeElement?.closest('#v-profile .fields')) renderProfile();
   renderSync();
 }
@@ -872,7 +886,7 @@ async function onUser(user){
     catch (e) { syncBusy = ''; syncError = errText(e) + '. Riprovo quando torna la connessione.'; return renderSync(); }
     syncBusy = '';
   }
-  startListeners(); pushPending(); refreshViews();
+  startListeners(); pushPending(); refreshViews(); refreshNotify();
 }
 
 async function authAction(btn, fn){
@@ -901,6 +915,7 @@ $('#s-reset').onclick = e => authAction(e.target, async em => {
 $('#s-logout').onclick = async () => {
   const n = Object.keys(db.pending).length;
   if (!confirm((n ? `Ci sono ${n} modifiche non ancora inviate al cloud: resteranno solo su questo dispositivo.\n` : '') + 'Uscire dall\'account su questo dispositivo?')) return;
+  if (db.notify.on) await disableNotify().catch(() => {});
   db.syncUid = null; db.pending = {}; save();
   await fb.signOut(fbAuth);
 };
@@ -920,6 +935,93 @@ if (fbSetup) import('./firebase.js').then(m => {
   fb.onAuthStateChanged(fbAuth, onUser);
   renderSync();
 }).catch(() => { syncError = 'Sincronizzazione non disponibile: apri l\'app con la connessione attiva almeno una volta.'; renderSync(); });
+
+// ---------- notifiche (promemoria giornaliero) ----------
+// L'invio all'orario scelto lo fa notify/send.mjs (GitHub Actions); qui il dispositivo si iscrive e sceglie l'orario.
+const VAPID_PUBLIC_KEY = 'BAamDvCPVPcKSv2PplHika5hMfFs7t8VyT27fhCYWo8FLdobKe59o-QUhCWlGzlbsFBzywfaZ3rBZvQ_44CP6vY';
+db.notify = db.notify || {on:false, time:'21:00'};
+db.deviceId = db.deviceId || Math.random().toString(36).slice(2) + Date.now().toString(36);
+let notifyBusy = false;
+const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isStandalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const deviceRef = () => fb.doc(fbStore, 'users', fbUser.uid, 'devices', db.deviceId);
+const localTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Rome'; } catch { return 'Europe/Rome'; } };
+const b64ToBytes = b64 => { const s = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(s, c => c.charCodeAt(0)); };
+$('#nt-time').innerHTML = Array.from({length:96}, (_, i) => pad(Math.floor(i / 4)) + ':' + pad(i % 4 * 15)).map(t => `<option>${t}</option>`).join('');
+
+function renderNotify(){
+  const linked = fbUser && db.syncUid === fbUser.uid;
+  let info = '', usable = false;
+  if (!pushSupported()) info = isIos && !isStandalone ? 'Per le notifiche apri l\'app dall\'icona sulla schermata Home (serve iOS 16.4 o successivo).' : 'Questo browser non supporta le notifiche.';
+  else if (!linked) info = 'Per i promemoria serve l\'accesso: Profilo → Sincronizzazione cloud.';
+  else if (Notification.permission === 'denied') info = 'Le notifiche sono bloccate: attivale nelle impostazioni del telefono (Notifiche → Mal di Testa), poi riapri l\'app.';
+  else { usable = true; info = db.notify.on
+    ? `Attivo su questo dispositivo: ogni giorno alle ${db.notify.time} ti arriva un messaggio a sorpresa. Se hai già segnato l'episodio del giorno, non arriva niente.`
+    : 'Ogni giorno, all\'orario che scegli, ti arriva un messaggio a sorpresa che ti ricorda di segnare i mal di testa.'; }
+  $('#nt-info').textContent = info;
+  $('#nt-box').hidden = !usable;
+  $('#nt-time').value = db.notify.time;
+  $('#nt-toggle').textContent = notifyBusy ? 'Un momento…' : db.notify.on ? 'Disattiva promemoria' : 'Attiva promemoria';
+  $('#nt-toggle').className = 'btn' + (db.notify.on ? ' danger' : '');
+  $('#nt-toggle').disabled = notifyBusy;
+}
+
+async function saveDevice(sub){
+  await fb.setDoc(deviceRef(), {enabled:true, time:db.notify.time, tz:localTz(), subscription:sub.toJSON(),
+    device: navigator.userAgent.slice(0, 200), updatedAt:Date.now()}, {merge:true});
+}
+async function enableNotify(){
+  // la richiesta del permesso deve partire subito dal tocco, senza altre attese prima (iOS)
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { renderNotify(); return toast('Permesso per le notifiche non concesso'); }
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToBytes(VAPID_PUBLIC_KEY)});
+  await saveDevice(sub);
+  db.notify.on = true; save();
+  toast('Promemoria attivato ✓');
+}
+async function disableNotify(){
+  db.notify.on = false; save();
+  const reg = await navigator.serviceWorker.ready;
+  const sub = await reg.pushManager.getSubscription();
+  if (sub) await sub.unsubscribe().catch(() => {});
+  if (fbUser) await fb.deleteDoc(deviceRef());
+  toast('Promemoria disattivato');
+}
+// all'apertura dell'app: se il promemoria è attivo, aggiorna l'iscrizione (può cambiare) o la spegne se il permesso è stato tolto
+async function refreshNotify(){
+  if (!db.notify.on || !pushSupported() || !fbUser || db.syncUid !== fbUser.uid) return renderNotify();
+  try {
+    const sub = Notification.permission === 'granted' && await (await navigator.serviceWorker.ready).pushManager.getSubscription();
+    if (sub) await saveDevice(sub);
+    else { db.notify.on = false; save(); await fb.deleteDoc(deviceRef()); }
+  } catch (e) { /* offline: riprova alla prossima apertura */ }
+  renderNotify();
+}
+$('#nt-toggle').onclick = async () => {
+  const turningOn = !db.notify.on;
+  notifyBusy = true; renderNotify();
+  try { await (turningOn ? enableNotify() : disableNotify()); }
+  catch (e) { alert('Non è stato possibile ' + (turningOn ? 'attivare' : 'disattivare') + ' il promemoria: ' + errText(e)); }
+  finally { notifyBusy = false; renderNotify(); }
+};
+$('#nt-time').onchange = async e => {
+  db.notify.time = e.target.value; save(); renderNotify();
+  if (!db.notify.on) return;
+  try { await fb.setDoc(deviceRef(), {time:db.notify.time, tz:localTz(), updatedAt:Date.now()}, {merge:true}); toast('Orario aggiornato ✓'); }
+  catch (err) { alert('Orario non salvato nel cloud: ' + errText(err)); }
+};
+let notifyMessages = null;
+$('#nt-test').onclick = async () => {
+  if (Notification.permission !== 'granted' && await Notification.requestPermission() !== 'granted') return renderNotify();
+  try { notifyMessages = notifyMessages || await (await fetch('notify/messages.json')).json(); }
+  catch { notifyMessages = ["Piccola Stella, hai avuto mal di testa oggi? Segnalo nell'app!!"]; }
+  const reg = await navigator.serviceWorker.ready;
+  await reg.showNotification('Diario Mal di Testa', {body: notifyMessages[Math.floor(Math.random() * notifyMessages.length)],
+    icon:'icon-192.png', badge:'icon-192.png', tag:'promemoria'});
+  toast('Notifica inviata: guarda in alto!');
+};
 
 // ---------- report PDF ----------
 // Generatore PDF minimale (A4, font Helvetica standard del PDF): nessuna libreria esterna, funziona offline.
@@ -1246,7 +1348,7 @@ $('#pdf-sheet').onclick = e => {
 
 // ---------- init ----------
 resetForm();
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>
 </body>
 </html>

@@ -1,6 +1,14 @@
-# Mai caricare dati personali nel repository
+# Mai caricare dati personali nel repository (backup .json, .csv, .xlsx)
 *.json
 !manifest.json
+# file di progetto del promemoria (nessun dato personale)
+!notify/package.json
+!notify/package-lock.json
+!notify/messages.json
 *.csv
 *.xlsx
 .claude/
+node_modules/
+# chiavi dell'account di servizio Firebase: vanno solo nei secret di GitHub
+*service-account*
+*firebase-adminsdk*

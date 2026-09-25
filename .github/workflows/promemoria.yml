@@ -1,0 +1,35 @@
+name: Promemoria giornaliero
+
+# Ogni 10 minuti controlla quali dispositivi devono ricevere il promemoria e lo invia (notify/send.mjs).
+# GitHub può far partire le esecuzioni programmate con qualche minuto di ritardo.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promemoria
+  cancel-in-progress: false
+
+jobs:
+  invia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: notify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: notify/package-lock.json
+      - run: npm ci --omit=dev --no-audit --no-fund
+      - run: node send.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}

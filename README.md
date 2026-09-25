@@ -27,6 +27,19 @@ vengono sincronizzati tra tutti i dispositivi collegati allo stesso account, anc
   (`firebase-entry.js` elenca le funzioni usate in `index.html` come `fb.*`).
 - Per l'accesso con Google: provider *Google* attivo in Authentication e `lucabel93.github.io` tra i *Domini autorizzati*.
 
+## Promemoria giornaliero (notifiche)
+In *Impostazioni → Notifiche* ogni dispositivo (collegato al cloud) sceglie un orario e si iscrive alle notifiche web push.
+Su iPhone funziona solo dall'app aggiunta alla schermata Home, con iOS 16.4 o successivo.
+
+- L'invio lo fa `.github/workflows/promemoria.yml` (GitHub Actions, gratis) ogni 10 minuti con `notify/send.mjs`:
+  a ogni dispositivo arriva una notifica al giorno all'orario scelto (anche con qualche minuto di ritardo),
+  non arriva se l'episodio del giorno è già segnato.
+- I messaggi sono in `notify/messages.json`: uno diverso ogni giorno, in un ordine a sorpresa che li usa tutti prima di ricominciare.
+- Secret del repository (Settings → Secrets and variables → Actions):
+  `FIREBASE_SERVICE_ACCOUNT` (JSON della chiave dell'account di servizio Firebase) e `VAPID_PRIVATE_KEY`
+  (chiave privata abbinata a `VAPID_PUBLIC_KEY` in `index.html` e `notify/send.mjs`).
+- GitHub sospende le esecuzioni programmate dopo 60 giorni senza modifiche al repository: in quel caso basta riattivarle da *Actions*.
+
 ## Privacy
 Il repository è pubblico: **non caricare mai file con dati personali** (`.json` di backup, `.csv`, `.xlsx`).
 Il `.gitignore` li esclude già.

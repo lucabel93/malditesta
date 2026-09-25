@@ -1,0 +1,11 @@
+{
+  "name": "malditesta-promemoria",
+  "private": true,
+  "type": "module",
+  "description": "Invia il promemoria giornaliero (web push) ai dispositivi iscritti. Eseguito da .github/workflows/promemoria.yml",
+  "scripts": { "send": "node send.mjs" },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "web-push": "^3.6.7"
+  }
+}
