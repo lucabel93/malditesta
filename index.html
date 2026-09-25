@@ -73,6 +73,8 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
 .sheet p{margin:0 0 14px;color:var(--muted);font-size:14px}
 .btn.google{background:var(--card);color:var(--text);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:10px}
 .or{text-align:center;color:var(--muted);font-size:13px;margin:14px 0 10px}
+.sync-hint .row{margin-top:10px}
+.sync-hint #sync-hint-no{background:var(--card);color:var(--accent)}
 .linkbtn{display:block;margin:12px auto 0;color:var(--accent);font-size:15px;font-weight:500;padding:6px}
 .sync-status{display:flex;gap:10px;align-items:flex-start}
 .sync-status b{display:block;font-size:15px;word-break:break-all}
@@ -149,6 +151,10 @@ tr.tot td{font-weight:700;border-bottom:0}
 <main>
   <!-- ======= INSERIMENTO ======= -->
   <section class="view active" id="v-add">
+    <div class="banner sync-hint" id="sync-hint" hidden>
+      <span>☁️ Accedi per salvare i dati nel cloud e ritrovarli su tutti i tuoi dispositivi.</span>
+      <div class="row"><button class="btn small" id="sync-hint-go">Accedi</button><button class="btn small" id="sync-hint-no">Non ora</button></div>
+    </div>
     <div class="banner" id="edit-banner" hidden>Stai modificando un episodio già registrato</div>
 
     <div class="card">
@@ -713,7 +719,7 @@ const FIREBASE_CONFIG = {
   appId: '1:50014783445:web:c4ca82f6f66c8daa5b1f5c',
 };
 const fbSetup = window.__MDT_FIREBASE || (FIREBASE_CONFIG && {config: FIREBASE_CONFIG});
-let fb = null, fbAuth = null, fbStore = null, fbUser = null, fbListeners = [], syncError = '', syncBusy = '';
+let fb = null, fbAuth = null, fbStore = null, fbUser = null, fbListeners = [], syncError = '', syncBusy = '', authKnown = false;
 const inflight = {};
 
 const AUTH_ERRORS = {
@@ -732,6 +738,8 @@ const AUTH_ERRORS = {
 const errText = e => { const t = AUTH_ERRORS[e && e.code]; return t !== undefined ? t : (e && e.message) || String(e); };
 
 function renderSync(){
+  // invito ad accedere nella prima schermata, finché il dispositivo non è collegato (si può rimandare di 7 giorni)
+  $('#sync-hint').hidden = !(fb && authKnown && !fbUser && !((db.syncHintUntil || 0) > Date.now()));
   const on = !!fbUser && db.syncUid === fbUser.uid;
   $('#sync-off').hidden = !!fb;
   $('#sync-login').hidden = !fb || !!fbUser;
@@ -825,7 +833,7 @@ function startListeners(){
 
 async function onUser(user){
   fbListeners.forEach(u => u()); fbListeners = [];
-  fbUser = user; syncError = '';
+  fbUser = user; syncError = ''; authKnown = true;
   if (!user) return renderSync();
   if (db.syncUid !== user.uid) {
     syncBusy = 'Unione dei dati di questo dispositivo con il cloud…'; renderSync();
@@ -853,6 +861,8 @@ $('#s-google').onclick = e => {
     .catch(err => { const t = errText(err); if (t) alert(t); })
     .finally(() => { btn.disabled = false; });
 };
+$('#sync-hint-go').onclick = () => { show('v-profile'); $('#sync-login').scrollIntoView({block:'center'}); };
+$('#sync-hint-no').onclick = () => { db.syncHintUntil = Date.now() + 7 * 864e5; save(); renderSync(); };
 $('#s-reset').onclick = e => authAction(e.target, async em => {
   await fb.sendPasswordResetEmail(fbAuth, em);
   alert('Ti ho mandato un\'email per reimpostare la password. Poi torna qui e accedi con la nuova password.');
