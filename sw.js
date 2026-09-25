@@ -1,6 +1,6 @@
 // Cache per l'uso offline. Cambia VERSION quando aggiorni l'app.
-const VERSION = 'mdt-v12';
-const FILES = ['./', 'index.html', 'firebase.js', 'manifest.json', 'notify/messages.json', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const VERSION = 'mdt-v13';
+const FILES = ['./', 'index.html', 'firebase.js', 'manifest.json', 'notify/messages.json', 'app-icon-180.png', 'app-icon-192.png', 'app-icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
@@ -27,7 +27,7 @@ self.addEventListener('push', e => {
   try { data = e.data ? e.data.json() : {}; } catch { data = {body: e.data.text()}; }
   e.waitUntil(self.registration.showNotification(data.title || 'Diario Mal di Testa', {
     body: data.body || "Hai avuto mal di testa oggi? Segnalo nell'app!",
-    icon: 'icon-192.png', badge: 'icon-192.png', tag: 'promemoria', data: {url: './'},
+    icon: 'app-icon-192.png', badge: 'app-icon-192.png', tag: 'promemoria', data: {url: './'},
   }));
 });
 // Tocco sulla notifica: apre l'app (o la porta in primo piano)
