@@ -3,7 +3,7 @@
 Web app personale (PWA) per registrare gli episodi di mal di testa da iPhone.
 
 - Un file solo: `index.html` (HTML + CSS + JS, nessuna dipendenza)
-- Dati salvati sul dispositivo (localStorage); facoltativamente sincronizzati nel cloud con Firebase (account email + password)
+- Dati salvati sul dispositivo (localStorage); facoltativamente sincronizzati nel cloud con Firebase (account Google oppure email + password)
 - Funziona offline grazie a `sw.js`
 - Backup/ripristino in JSON ed esportazione CSV per Excel dalla schermata Impostazioni
 - Report PDF per un periodo a scelta (dal/al) con riepilogo, grafico, tabella mensile, calendario, farmaci, note ed elenco episodi, generato sul telefono senza librerie esterne
@@ -23,8 +23,9 @@ vengono sincronizzati tra tutti i dispositivi collegati allo stesso account, anc
   da incollare in Console Firebase → Firestore → Regole.
 - `firebase.js` è l'SDK Firebase (solo le funzioni usate) in un unico file, così l'app resta senza build e funziona offline.
   Per rigenerarlo: `npm i firebase esbuild` e poi
-  `npx esbuild entry.js --bundle --format=esm --minify --platform=browser --target=es2020 --outfile=firebase.js`,
-  dove `entry.js` riesporta le funzioni importate in `index.html` (`fb.*`).
+  `npx esbuild firebase-entry.js --bundle --format=esm --minify --platform=browser --target=es2020 --outfile=firebase.js`
+  (`firebase-entry.js` elenca le funzioni usate in `index.html` come `fb.*`).
+- Per l'accesso con Google: provider *Google* attivo in Authentication e `lucabel93.github.io` tra i *Domini autorizzati*.
 
 ## Privacy
 Il repository è pubblico: **non caricare mai file con dati personali** (`.json` di backup, `.csv`, `.xlsx`).

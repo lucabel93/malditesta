@@ -71,6 +71,8 @@ input[type=date],input[type=time]{-webkit-appearance:none;appearance:none}
 .sheet{background:var(--card);width:100%;max-width:640px;border-radius:18px 18px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom))}
 .sheet h3{margin:0 0 4px;font-size:18px}
 .sheet p{margin:0 0 14px;color:var(--muted);font-size:14px}
+.btn.google{background:var(--card);color:var(--text);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;gap:10px}
+.or{text-align:center;color:var(--muted);font-size:13px;margin:14px 0 10px}
 .linkbtn{display:block;margin:12px auto 0;color:var(--accent);font-size:15px;font-weight:500;padding:6px}
 .sync-status{display:flex;gap:10px;align-items:flex-start}
 .sync-status b{display:block;font-size:15px;word-break:break-all}
@@ -261,7 +263,9 @@ tr.tot td{font-weight:700;border-bottom:0}
         <p class="hint" style="margin:0">Non ancora attiva: senza account i dati restano solo su questo dispositivo.</p>
       </div>
       <div id="sync-login" hidden>
-        <p class="hint" style="margin:0 0 12px">Accedi per salvare i dati nel cloud e ritrovarli su tutti i tuoi dispositivi (iPhone, tablet Android…). Usa la stessa email e password ovunque.</p>
+        <p class="hint" style="margin:0 0 12px">Accedi per salvare i dati nel cloud e ritrovarli su tutti i tuoi dispositivi (iPhone, tablet Android…). Usa lo stesso modo di accesso ovunque.</p>
+        <button class="btn google" id="s-google"><svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.5l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.2l7.8 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 7l7.5 5.8c4.4-4 6.8-10 6.8-17.3z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.8 6.1C6.6 42.6 14.6 48 24 48z"/></svg>Accedi con Google</button>
+        <p class="or">oppure con email e password</p>
         <div class="fields">
           <label>Email<input type="email" id="s-email" autocomplete="username" autocapitalize="off" autocorrect="off"></label>
           <label>Password<input type="password" id="s-pass" autocomplete="current-password" placeholder="Almeno 6 caratteri"></label>
@@ -700,7 +704,14 @@ $('#p-save').onclick = () => {
 // ---------- sincronizzazione cloud (Firebase) ----------
 // Dati del progetto: Console Firebase → Impostazioni progetto → Le tue app → App web.
 // Non sono segreti: l'accesso ai dati è protetto dall'account e dalle regole in firestore.rules.
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBt5xs7RH8XICtxxouyO0lWIhvfylURbK8',
+  authDomain: 'malditesta-53407.firebaseapp.com',
+  projectId: 'malditesta-53407',
+  storageBucket: 'malditesta-53407.firebasestorage.app',
+  messagingSenderId: '50014783445',
+  appId: '1:50014783445:web:c4ca82f6f66c8daa5b1f5c',
+};
 const fbSetup = window.__MDT_FIREBASE || (FIREBASE_CONFIG && {config: FIREBASE_CONFIG});
 let fb = null, fbAuth = null, fbStore = null, fbUser = null, fbListeners = [], syncError = '', syncBusy = '';
 const inflight = {};
@@ -710,10 +721,15 @@ const AUTH_ERRORS = {
   'auth/user-not-found':'Nessun account con questa email', 'auth/invalid-email':'Email non valida',
   'auth/email-already-in-use':'Esiste già un account con questa email: usa Accedi',
   'auth/weak-password':'La password deve avere almeno 6 caratteri', 'auth/missing-password':'Scrivi la password',
+  'auth/popup-blocked':'La finestra di accesso di Google è stata bloccata: riprova', 'auth/cancelled-popup-request':'',
+  'auth/popup-closed-by-user':'', 'auth/user-cancelled':'',
+  'auth/unauthorized-domain':'Accesso con Google non autorizzato su questo indirizzo: aggiungi lucabel93.github.io in Firebase → Authentication → Impostazioni → Domini autorizzati',
+  'auth/operation-not-allowed':'Questo modo di accesso non è attivo nel progetto Firebase',
+  'auth/account-exists-with-different-credential':'Esiste già un account con questa email creato in un altro modo: accedi con email e password',
   'auth/network-request-failed':'Nessuna connessione a internet', 'auth/too-many-requests':'Troppi tentativi: riprova tra qualche minuto',
   'permission-denied':'Accesso ai dati negato: controlla le regole di Firestore', 'unavailable':'Nessuna connessione a internet',
 };
-const errText = e => AUTH_ERRORS[e && e.code] || (e && e.message) || String(e);
+const errText = e => { const t = AUTH_ERRORS[e && e.code]; return t !== undefined ? t : (e && e.message) || String(e); };
 
 function renderSync(){
   const on = !!fbUser && db.syncUid === fbUser.uid;
@@ -730,7 +746,7 @@ function renderSync(){
   else if (n) { cls = 'wait'; txt = navigator.onLine ? `Invio di ${n} modific${n === 1 ? 'a' : 'he'}…` : `Offline: ${n} modific${n === 1 ? 'a' : 'he'} da inviare`; }
   else if (!navigator.onLine) { cls = 'wait'; txt = 'Offline: i dati si aggiornano quando torna la connessione'; }
   $('#s-dot').className = 'dot ' + cls;
-  $('#s-who').textContent = fbUser.email;
+  $('#s-who').textContent = fbUser.email || fbUser.displayName || 'Account collegato';
   $('#s-state').textContent = txt;
 }
 function refreshViews(){
@@ -830,6 +846,13 @@ async function authAction(btn, fn){
 }
 $('#s-login').onclick = e => authAction(e.target, (em, pw) => fb.signInWithEmailAndPassword(fbAuth, em, pw));
 $('#s-signup').onclick = e => authAction(e.target, (em, pw) => fb.createUserWithEmailAndPassword(fbAuth, em, pw));
+// il popup va aperto subito nel gestore del tocco, senza attese prima, altrimenti iOS lo blocca
+$('#s-google').onclick = e => {
+  const btn = e.currentTarget; btn.disabled = true;
+  fb.signInWithPopup(fbAuth, new fb.GoogleAuthProvider())
+    .catch(err => { const t = errText(err); if (t) alert(t); })
+    .finally(() => { btn.disabled = false; });
+};
 $('#s-reset').onclick = e => authAction(e.target, async em => {
   await fb.sendPasswordResetEmail(fbAuth, em);
   alert('Ti ho mandato un\'email per reimpostare la password. Poi torna qui e accedi con la nuova password.');
@@ -846,7 +869,8 @@ addEventListener('offline', renderSync);
 if (fbSetup) import('./firebase.js').then(m => {
   fb = m;
   const app = fb.initializeApp(fbSetup.config);
-  fbAuth = fb.initializeAuth(app, {persistence:[fb.indexedDBLocalPersistence, fb.browserLocalPersistence]});
+  fbAuth = fb.initializeAuth(app, {persistence:[fb.indexedDBLocalPersistence, fb.browserLocalPersistence],
+    popupRedirectResolver: fb.browserPopupRedirectResolver});
   fbStore = fb.initializeFirestore(app, {localCache: fb.persistentLocalCache({tabManager: fb.persistentMultipleTabManager()})});
   if (fbSetup.emulator) {
     fb.connectAuthEmulator(fbAuth, 'http://' + fbSetup.emulator + ':9099', {disableWarnings:true});
