@@ -1,10 +1,12 @@
 name: Promemoria giornaliero
 
-# Ogni 10 minuti controlla quali dispositivi devono ricevere il promemoria e lo invia (notify/send.mjs).
-# GitHub può far partire le esecuzioni programmate con qualche minuto di ritardo.
+# Controlla quali dispositivi devono ricevere il promemoria e lo invia (notify/send.mjs).
+# Lo avvia ogni 15 minuti cron-job.org (workflow_dispatch tramite API, parte subito).
+# La programmazione di GitHub resta solo come riserva: sugli account gratuiti
+# le esecuzioni programmate partono spesso con ore di ritardo.
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:

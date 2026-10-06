@@ -32,9 +32,14 @@ vengono sincronizzati tra tutti i dispositivi collegati allo stesso account, anc
 In *Impostazioni → Notifiche* ogni dispositivo (collegato al cloud) sceglie un orario e si iscrive alle notifiche web push.
 Su iPhone funziona solo dall'app aggiunta alla schermata Home, con iOS 16.4 o successivo.
 
-- L'invio lo fa `.github/workflows/promemoria.yml` (GitHub Actions, gratis) ogni 10 minuti con `notify/send.mjs`:
-  a ogni dispositivo arriva una notifica al giorno all'orario scelto (anche con qualche minuto di ritardo),
+- L'invio lo fa `.github/workflows/promemoria.yml` (GitHub Actions, gratis) con `notify/send.mjs`:
+  a ogni dispositivo arriva una notifica al giorno all'orario scelto (fino a ~15 minuti dopo),
   non arriva se l'episodio del giorno è già segnato.
+- Il workflow lo avvia ogni 15 minuti **cron-job.org** con una richiesta `POST` a
+  `https://api.github.com/repos/lucabel93/malditesta/actions/workflows/promemoria.yml/dispatches`
+  (body `{"ref":"main"}`, header `Authorization: Bearer <token>` con un token fine-grained limitato a questo
+  repository e al permesso *Actions: Read and write*). Quando il token scade va rigenerato e aggiornato su cron-job.org.
+  La programmazione interna di GitHub (una volta l'ora) resta solo come riserva, perché sugli account gratuiti parte con ore di ritardo.
 - I messaggi sono in `notify/messages.json`: uno diverso ogni giorno, in un ordine a sorpresa che li usa tutti prima di ricominciare.
 - Secret del repository (Settings → Secrets and variables → Actions):
   `FIREBASE_SERVICE_ACCOUNT` (JSON della chiave dell'account di servizio Firebase) e `VAPID_PRIVATE_KEY`
